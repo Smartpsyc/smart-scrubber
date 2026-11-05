@@ -356,6 +356,12 @@ export function suggest(text, kase = null) {
       && !TOWN_DISTINCTIVE_HE.has(hit.rec.he);
     if (ambiguous && !cue) continue;
     if (!t.he && !isCap(t.raw)) continue;
+    const writtenForm = text.slice(t.start + (hit.pre ? hit.pre.length : 0), toks[i + hit.n - 1].end).replace(/^[-־]/, '');
+    if (declared.has(normalizeForm(writtenForm)) || [...hit.rec.all.he, ...hit.rec.all.en].some((f) => declared.has(normalizeForm(f)))) {
+      for (let k = 0; k < hit.n; k++) used.add(i + k); // already in the case
+      i += hit.n - 1;
+      continue;
+    }
     const key = hit.rec.he;
     let p = places.get(key);
     if (!p) places.set(key, (p = { rec: hit.rec, occ: [], reasons: new Set(), conf: ambiguous ? 'medium' : 'high', forms: { he: new Set(), en: new Set() } }));

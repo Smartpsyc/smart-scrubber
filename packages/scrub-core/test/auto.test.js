@@ -135,3 +135,13 @@ function runHeldout(SET, label) {
 test('HELD-OUT set 1 (informed the general rules)', () => runHeldout(HELDOUT, 'HELD-OUT 1'));
 test('HELD-OUT set 2 (frozen rules, never tuned on)', () => runHeldout(HELDOUT2, 'HELD-OUT 2'));
 
+
+test('a town the clinician already declared is not suggested again (spelling variant included)', () => {
+  const kase = createCase({ entities: [{ kind: 'town', he: 'קריית אונו' }] });
+  for (const text of ['נועה הגיעה מקריית אונו.', 'נועה הגיעה מקרית אונו.']) {
+    const { suggestions } = suggest(text, kase);
+    assert.deepEqual(suggestions.filter((s) => s.kind === 'town'), [], text);
+  }
+  const fresh = suggest('נועה הגיעה מקריית אונו.', createCase());
+  assert.equal(fresh.suggestions.filter((s) => s.kind === 'town').length, 1);
+});
