@@ -27,7 +27,7 @@ function mappingCandidates(text, kase) {
           const g = mt.groups;
           out.push({
             start: mt.index, end: mt.index + mt[0].length, kind: m.kind, mappingId: m.id,
-            entityId: m.entityId, pre: g.pre || '', hy: g.hy || '', core: g.core, script, priority: 100,
+            entityId: m.entityId, pre: g.pre || '', hy: g.hy || '', core: g.core, script, form, priority: 100,
           });
         }
       }
@@ -56,6 +56,9 @@ export function scrub(text, kase) {
       else if (s.script === 'en') s.replacement = applyCase(s.core, m.sur.en);
       else s.replacement = s.pre + s.hy + m.sur.he;
       s.source = 'declared';
+      // Restore brings back the spelling the clinician actually uses.
+      m.seen = m.seen || {};
+      m.seen[s.form] = (m.seen[s.form] || 0) + 1;
     } else if (REDACTION_KINDS.includes(s.kind)) {
       let r = c.redactions[s.key];
       if (!r) {
@@ -128,6 +131,15 @@ function kindForLabel(label) {
   return REDACTION_KINDS.find((k) => LABELS[k].he === label || LABELS[k].en.toLowerCase() === l);
 }
 
+function preferredReal(m, script) {
+  const forms = m.real[script];
+  if (!forms.length) return undefined;
+  if (!m.seen) return forms[0];
+  let best = forms[0], n = m.seen[best] || 0;
+  for (const f of forms) if ((m.seen[f] || 0) > n) { best = f; n = m.seen[f]; }
+  return best;
+}
+
 export function restore(text, kase) {
   const c = kase;
   const cands = [];
@@ -137,7 +149,7 @@ export function restore(text, kase) {
       const surForm = m.sur[script];
       if (!surForm) continue;
       const other = script === 'he' ? 'en' : 'he';
-      const target = m.real[script][0] ?? m.real[other][0];
+      const target = preferredReal(m, script) ?? preferredReal(m, other);
       if (!target) continue;
       const priority = m.lossy ? 50 : 100;
       if (m.token) {

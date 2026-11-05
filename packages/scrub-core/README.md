@@ -71,6 +71,42 @@ Scans any request body (JSON, including `\uXXXX` escapes) for declared identifie
 English possessives, plus undeclared checksum-valid IDs, IL phones and emails. Uses a built-in SHA-256 so it
 doesn't depend on `crypto.subtle` in a page world that page scripts could patch.
 
+## Auto mode (for users in a rush)
+
+```js
+const { suggestions } = suggest(text, kase);   // chips: people, surnames, nicknames, towns, schools, English spellings
+const r = autoScrub(text, kase);               // accept all suggestions, then scrub
+```
+
+Finds people, surnames, nicknames, towns and schools with nothing declared, and turns accepted suggestions into
+case entities (so later messages and the leak guard cover them). How it decides:
+
+- **Curated lexicon** (`src/auto/lexicon.js`): ~900 first names with gender and paired he/en spellings (Israeli, Arab,
+  Russian-speaking, English), ~250 surnames, cue words, gender-agreement markers.
+- **Population-registry first names** (116,671, open data) to confirm a word after a cue is a name ("אמו רחל" yes,
+  "אמו אמרה" no). **CBS localities** (1,316, he + en, with spelling variants like קרית/קריית).
+- **Rules:** name followed by an age ("ראמז חלבי, בן 15"); cue words before (אמו, המורה, גב', ד"ר, Mrs., …), with an
+  optional adjective ("אחותה הגדולה שרי"); a relation word after ("איתן, אחיו של…"); a verb right after a word-name
+  ("נועם הגיעה"); quoted/bracketed nicknames; "goes by"; English place phrases ("lives in", "School in").
+- **Names that are everyday words** (אור, שירה, מיכל, דוד, מזרחי; Grace, Will) count only with one of those signals.
+  **Single-word localities** count alone only if on a hand-checked list of distinctive names (חיפה, סח'נין);
+  the rest (רחוב, מצליח, חוסן, שירה…) need a town cue.
+- **Gender** of unisex names from agreement after the name; otherwise the chip asks.
+- **English spellings** of Hebrew names by consonant skeleton (ולנטינה ↔ Valentina, ≥3 consonants).
+- Job titles are **not** auto-detected (manual field).
+
+**Measured recall** (share of real name/place mentions removed, nothing declared):
+
+| Set | Recall | False alarms | Note |
+|-----|--------|--------------|------|
+| `test/corpus.js` (112 notes) | 100% (556/556) | 0 | rules were tuned on it: optimistic |
+| `test/heldout.js` (24 notes) | 96.2% (75/78) | 1 | informed the general rules after a 53.8% first run |
+| `test/heldout2.js` (19 notes) | **85.5% (53/62)** | 2 | written after the rules froze, never tuned on: **the honest number** |
+
+Known misses (set 2): word-names with no cue ("כשאבי יחזור"), word-like towns with no nearby cue ("מנתיבות"),
+neighbourhoods (not in any list), 2-consonant English surnames. **Manual mode remains the reliable path**, and the
+preview must stay in front of the clinician in auto mode.
+
 ## Threat model
 
 **Protects against:** declared and pattern-detectable identifiers reaching the AI provider from this browser profile.
@@ -83,10 +119,15 @@ doesn't depend on `crypto.subtle` in a page world that page scripts could patch.
 - **Hash brute force:** names are low-entropy. Salted hashes keep identifiers out of logs, crash reports and casual
   inspection of the page; a page script deliberately hashing a list of Israeli names against the salt could recover them.
 
+## Data
+
+`data/raw/` holds the two open-data sources with provenance (`data/raw/SOURCES.md`); `node tools/build-data.mjs`
+regenerates `src/auto/registry.js` and `src/auto/localities.js`.
+
 ## Tests
 
 ```
-npm test        # node --test, no dependencies
+npm test        # node --test, no dependencies (prints auto-mode recall per set)
 ```
 
 The gate is `test/corpus.test.js`: 112 synthetic notes (5 Hebrew-speaking families incl. an Arab family, 1 English-only

@@ -111,7 +111,7 @@ test('a later message containing an old surrogate is flagged', () => {
 test('validation: scripts and kinds', () => {
   assert.throws(() => createCase({ entities: [{ kind: 'person', first: { he: 'Noa' } }] }), /Hebrew/);
   assert.throws(() => createCase({ entities: [{ kind: 'planet', he: 'מאדים' }] }), /kind/);
-  assert.throws(() => createCase({ entities: [{ kind: 'person', first: {} }] }), /first name/);
+  assert.throws(() => createCase({ entities: [{ kind: 'person', first: {} }] }), /first name or a surname/);
 });
 
 test('legend lists real ↔ surrogate for the panel', () => {

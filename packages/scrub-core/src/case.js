@@ -37,8 +37,9 @@ export function normalizeEntity(e, id) {
   if (e.kind === 'person') {
     out.gender = GENDERS.includes(e.gender) ? e.gender : 'x';
     out.first = cleanForms(e.first, `${out.id}.first`);
-    if (!out.first.he.length && !out.first.en.length) throw new Error(`${out.id}: a person needs a first name`);
     if (e.last) out.last = cleanForms(e.last, `${out.id}.last`);
+    const hasLast = out.last && (out.last.he.length || out.last.en.length);
+    if (!out.first.he.length && !out.first.en.length && !hasLast) throw new Error(`${out.id}: a person needs a first name or a surname`);
     out.nicknames = (e.nicknames || []).map((n, i) => cleanForms(n, `${out.id}.nicknames[${i}]`))
       .filter((n) => n.he.length || n.en.length);
   } else {
@@ -82,6 +83,34 @@ export function addEntities(kase, entities) {
     if (next.entities.some((x) => x.id === ent.id)) throw new Error(`duplicate entity id ${ent.id}`);
     next.entities.push(ent);
   }
+  return next;
+}
+
+// Attach a nickname to an existing person (auto mode: 'Yonatan goes by "Yoni"').
+export function addNickname(kase, entityId, nick) {
+  const next = structuredClone(kase);
+  const e = next.entities.find((x) => x.id === entityId && x.kind === 'person');
+  if (!e) throw new Error(`no person ${entityId}`);
+  const f = cleanForms(nick, `${entityId}.nickname`);
+  const all = [...e.first.he, ...e.first.en, ...e.nicknames.flatMap((n) => [...n.he, ...n.en])].map(normalizeForm);
+  if ([...f.he, ...f.en].some((s) => all.includes(normalizeForm(s)))) return next;
+  e.nicknames.push(f);
+  return next;
+}
+
+// Add another spelling to a declared entity part (auto mode: "Valentina"
+// found for the Hebrew-declared ולנטינה). Updates an existing mapping too,
+// so the new spelling is scrubbed with the same surrogate.
+export function addSpelling(kase, entityId, part, script, form) {
+  const next = structuredClone(kase);
+  const e = next.entities.find((x) => x.id === entityId);
+  if (!e) throw new Error(`no entity ${entityId}`);
+  if ((script === 'he') !== isHebrew(form)) throw new Error(`"${form}" is not ${script}`);
+  const target = part === 'first' ? e.first : part === 'last' ? e.last : part.startsWith('nick') ? e.nicknames[Number(part.slice(4))] : e;
+  if (!target) throw new Error(`${entityId} has no ${part}`);
+  const has = (list) => list.some((s) => normalizeForm(s) === normalizeForm(form));
+  if (!has(target[script])) target[script].push(form);
+  for (const m of next.mappings) if (m.entityId === entityId && m.part === part && !has(m.real[script])) m.real[script].push(form);
   return next;
 }
 
@@ -202,8 +231,9 @@ export function allocate(kase, text = '') {
 
   for (const e of next.entities) {
     if (e.kind === 'person') {
-      const pool = poolFor(next, e, e.first);
-      if (!has(e.id, 'first')) {
+      const pool = poolFor(next, e, e.first.he.length || e.first.en.length ? e.first : e.last);
+      const hasFirst = e.first.he.length || e.first.en.length;
+      if (hasFirst && !has(e.id, 'first')) {
         const reuse = findReusable(next, 'person', 'first', e.first);
         if (reuse) {
           add({ entityId: e.id, part: 'first', kind: 'person', gender: e.gender, real: e.first, sur: { ...reuse.sur }, token: reuse.token, dims: reuse.dims || [] });
@@ -215,14 +245,18 @@ export function allocate(kase, text = '') {
         }
       }
       const firstMap = next.mappings.find((m) => m.entityId === e.id && m.part === 'first');
-      e.nicknames.forEach((nick, i) => {
+      if (firstMap) e.nicknames.forEach((nick, i) => {
         const part = `nick${i}`;
         if (has(e.id, part)) return;
         const d = firstMap.dims && firstMap.dims[i];
         const accept = makeAcceptor(next, text);
-        if (d && accept([d.he, d.en])) add({ entityId: e.id, part, kind: 'person', real: nick, sur: { he: d.he, en: d.en }, token: false });
-        // No distinct diminutive available: the nickname maps to the surrogate
-        // first name. Scrubbing is still complete; restore returns the first name.
+        if (d && accept([d.he, d.en])) { add({ entityId: e.id, part, kind: 'person', real: nick, sur: { he: d.he, en: d.en }, token: false }); return; }
+        // No matching diminutive: give the nickname its own same-gender name.
+        // In context ('קוראים לאוריה "ליאת"') it still reads as a nickname,
+        // and restore stays exact.
+        const other = !firstMap.token && pickFromPool(pool.first[e.gender], seedKey(e, part), accept);
+        if (other) add({ entityId: e.id, part, kind: 'person', real: nick, sur: { he: other.he, en: other.en }, token: false });
+        // Pool exhausted: share the first name's surrogate (restore returns the first name).
         else add({ entityId: e.id, part, kind: 'person', real: nick, sur: { ...firstMap.sur }, token: firstMap.token, lossy: true });
       });
       if (e.last && (e.last.he.length || e.last.en.length) && !has(e.id, 'last')) {
