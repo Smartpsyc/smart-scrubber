@@ -1,0 +1,14 @@
+{
+  "name": "scrub-core",
+  "version": "0.1.0",
+  "description": "Local, dependency-free scrubbing of clinical identifiers (Hebrew + English) with same-gender surrogates and exact restore.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": "./src/index.js",
+  "files": ["src"],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": { "node": ">=22" },
+  "license": "Apache-2.0"
+}
