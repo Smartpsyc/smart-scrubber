@@ -1,3 +1,5 @@
 node_modules/
 .DS_Store
 *.log
+# raw open-data downloads (recreate with tools/fetch-data.mjs)
+packages/scrub-core/data/raw/

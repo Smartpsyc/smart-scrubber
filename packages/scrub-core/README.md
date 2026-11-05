@@ -121,8 +121,12 @@ preview must stay in front of the clinician in auto mode.
 
 ## Data
 
-`data/raw/` holds the two open-data sources with provenance (`data/raw/SOURCES.md`); `node tools/build-data.mjs`
-regenerates `src/auto/registry.js` and `src/auto/localities.js`.
+Auto mode bundles two Israeli open-data sets, used with attribution (details in `data/SOURCES.md`):
+- First names in the population registry, published by the **Population and Immigration Authority** on data.gov.il.
+- The list of localities, published by the **Central Bureau of Statistics** on data.gov.il.
+
+`node tools/fetch-data.mjs` downloads them into `data/raw/` (not committed); `node tools/build-data.mjs` regenerates
+`src/auto/registry.js` and `src/auto/localities.js`.
 
 ## Tests
 
