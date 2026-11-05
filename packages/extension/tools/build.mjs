@@ -18,6 +18,16 @@ cpSync(join(root, 'src'), out, { recursive: true });
 cpSync(join(root, '..', 'scrub-core', 'src'), join(out, 'vendor', 'scrub-core'), { recursive: true });
 cpSync(join(root, '..', '..', 'LICENSE'), join(out, 'LICENSE'));
 
+// File readers, bundled so nothing is ever fetched at run time (MV3 forbids
+// remote code anyway, and the panel's CSP blocks all network access).
+const nm = join(root, 'node_modules');
+const vendor = (from, to) => cpSync(join(nm, from), join(out, 'vendor', to));
+vendor('mammoth/mammoth.browser.min.js', 'mammoth/mammoth.browser.min.js');
+vendor('mammoth/LICENSE', 'mammoth/LICENSE');
+vendor('pdfjs-dist/build/pdf.min.mjs', 'pdfjs/pdf.min.mjs');
+vendor('pdfjs-dist/build/pdf.worker.min.mjs', 'pdfjs/pdf.worker.min.mjs');
+vendor('pdfjs-dist/LICENSE', 'pdfjs/LICENSE');
+
 const manifestPath = join(out, 'manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 if (test) {

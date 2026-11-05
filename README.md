@@ -10,7 +10,7 @@ stand-ins), work with the anonymous version inside Claude, then restore the iden
 | Part | Status |
 |------|--------|
 | [`packages/scrub-core`](packages/scrub-core) — engine: scrub / restore / leak guard, manual + auto mode | Working, 71 tests, zero dependencies |
-| [`packages/extension`](packages/extension) — Chrome side panel for claude.ai | MVP working against a mock page (8 end-to-end tests); files not yet |
+| [`packages/extension`](packages/extension) — Chrome side panel for claude.ai | Working against a mock page (11 end-to-end tests); Word/PDF/text files read locally; OCR for scans not yet |
 
 ```
 cd packages/scrub-core && npm test

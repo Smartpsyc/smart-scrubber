@@ -7,6 +7,7 @@ import {
 } from '../vendor/scrub-core/index.js';
 import { STRINGS, pickLang } from './i18n.js';
 import * as store from './store.js';
+import { extractFile } from './files.js';
 
 const $ = (id) => document.getElementById(id);
 const isHe = (s) => /[֐-׿]/.test(s);
@@ -237,7 +238,6 @@ function renderCase() {
   const notice = $('case-notice');
   notice.hidden = !S.caseNotice;
   notice.textContent = S.caseNotice ? S.t[S.caseNotice] : '';
-  $('draft-hint').hidden = !(S.caseId || '').startsWith('draft-');
 
   for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-checked', String(b.dataset.mode === S.rec.mode));
   $('mode-hint').textContent = S.rec.mode === 'auto' ? S.t.modeAutoHint : S.t.modeManualHint;
@@ -257,6 +257,7 @@ function renderCase() {
       el('button', { type: 'button', class: 'x', 'aria-label': `${S.t.remove} ${name}`, onclick: () => onRemoveEntity(e.id) }, '×'));
   });
   list.replaceChildren(...(items.length ? items : [el('li', { class: 'empty' }, S.t.nothingDeclared)]));
+  $('people-count').textContent = items.length ? `(${items.length})` : '';
   showFieldsFor($('add-kind').value);
 }
 
@@ -343,6 +344,7 @@ function renderLegend() {
     el('span', { class: 'arrow' }, '→'),
     el('span', { dir: 'auto' }, [l.surrogate.he, l.surrogate.en].filter((x, i, a) => x && a.indexOf(x) === i).join(' / '))));
   $('legend').replaceChildren(...(rows.length ? rows : [el('li', { class: 'muted' }, S.t.legendEmpty)]));
+  $('key-count').textContent = rows.length ? `(${rows.length})` : '';
 }
 
 function renderRestored() {
@@ -358,7 +360,7 @@ function renderRestored() {
 // ---------- actions ----------
 
 function showFieldsFor(kind) {
-  for (const f of document.querySelectorAll('#add-form .fields')) f.hidden = !f.dataset.for.split(' ').includes(kind);
+  for (const f of document.querySelectorAll('#add-form .fields[data-for]')) f.hidden = !f.dataset.for.split(' ').includes(kind);
 }
 
 function forms(primary, other) {
@@ -463,7 +465,8 @@ async function onInsert() {
     const r = await ask('insert', { text: result.text });
     if (!r.ok) { setMsg('send-msg', errText(r.reason), true); return; }
     await commit(result);
-    setMsg('send-msg', S.t.inserted);
+    setMsg('send-msg', r.how === 'attachment' ? S.t.insertedAttachment : S.t.inserted);
+    advance();
   } finally {
     S.busy = false;
     renderSendButton();
@@ -476,6 +479,36 @@ async function onCopyOut() {
   await navigator.clipboard.writeText(result.text);
   await commit(result);
   setMsg('send-msg', S.t.copiedOut);
+  advance();
+}
+
+// After the article goes out, the clinician works in Claude: show the key and restore.
+function advance() {
+  $('step2').open = true;
+  $('step3').open = true;
+}
+
+// ---------- files (read locally; see files.js) ----------
+
+async function loadFile(file) {
+  if (!file || !S.rec) return;
+  setMsg('file-msg', S.t.fileReading);
+  let r;
+  try {
+    r = await extractFile(file);
+  } catch (e) {
+    setMsg('file-msg', S.t.fileErr[e.message] || S.t.fileErr.unreadable, true);
+    return;
+  }
+  const cur = $('compose').value.trim();
+  const text = cur ? `${cur}\n\n${r.text}` : r.text;
+  $('compose').value = text;
+  S.rec.compose = text;
+  persistSoon();
+  recompute();
+  renderCompose();
+  renderLegend();
+  setMsg('file-msg', S.t.fileLoaded.replace('{name}', file.name));
 }
 
 async function onBringBack() {
@@ -484,6 +517,7 @@ async function onBringBack() {
   const r = await ask('readLast');
   if (!r.ok) { setMsg('restore-msg', errText(r.reason), true); return; }
   S.restored = restore(r.text, S.rec.kase);
+  $('step3').open = true;
   renderRestored();
 }
 
@@ -607,6 +641,17 @@ async function boot() {
     recomputeSoon();
   });
   $('insert').addEventListener('click', onInsert);
+  $('file-btn').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', (e) => { loadFile(e.target.files[0]); e.target.value = ''; });
+  for (const zone of [$('drop'), $('compose')]) {
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); $('drop').classList.add('over'); });
+    zone.addEventListener('dragleave', () => $('drop').classList.remove('over'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      $('drop').classList.remove('over');
+      if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+    });
+  }
   $('copy-out').addEventListener('click', onCopyOut);
   $('bring-back').addEventListener('click', onBringBack);
   $('restore-paste').addEventListener('click', onRestorePaste);
@@ -628,6 +673,9 @@ async function boot() {
   chrome.tabs.onUpdated.addListener((_id, info) => { if (info.status === 'complete' || info.url) refreshTarget(); });
   window.addEventListener('pagehide', () => { persistNow(); });
 
+  const v = `v${chrome.runtime.getManifest().version}`;
+  $('version').textContent = v;
+  $('version2').textContent = v;
   applyLang();
   await refreshTarget();
   setInterval(refreshTarget, 2500);

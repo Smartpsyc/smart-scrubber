@@ -17,6 +17,7 @@
     ?slow=1    → the reply keeps streaming until window.__finish() is called
 -->
 <div data-testid="transcript-list" id="transcript"></div>
+<div id="cards"></div>
 <div id="composer-wrap"></div>
 <button type="button" data-testid="chat-input-send" aria-label="Send message" disabled>Send</button>
 
@@ -40,6 +41,16 @@
     ed.addEventListener('paste', (e) => {
       e.preventDefault();
       const text = e.clipboardData.getData('text/plain');
+      // Like claude.ai: long pastes become a "pasted text" attachment card.
+      if (text.length > 4000) {
+        const card = document.createElement('div');
+        card.setAttribute('data-testid', 'file-thumbnail');
+        card.textContent = 'pasted';
+        card.dataset.text = text.trim();
+        document.getElementById('cards').append(card);
+        sync();
+        return;
+      }
       for (const line of text.split('\n')) {
         const p = document.createElement('p');
         if (line) p.textContent = line; else p.append(document.createElement('br'));
@@ -51,7 +62,8 @@
     wrap.replaceChildren(ed);
   }
   const text = () => ed.innerText.replace(/\n{3,}/g, '\n\n').trim();
-  function sync() { send.disabled = !ed.innerText.trim(); }
+  const cards = () => [...document.querySelectorAll('[data-testid="file-thumbnail"]')];
+  function sync() { send.disabled = !ed.innerText.trim() && !cards().length; }
   makeComposer();
 
   function row(kind, html) {
@@ -63,7 +75,8 @@
   }
 
   send.addEventListener('click', () => {
-    const msg = text();
+    const msg = [text(), ...cards().map((c) => c.dataset.text)].filter(Boolean).join('\n\n');
+    cards().forEach((c) => c.remove());
     window.__sent.push(msg);
     for (const r of transcript.querySelectorAll('[data-last-message]')) r.removeAttribute('data-last-message');
     const u = row('user', '<div data-testid="user-message"></div>');

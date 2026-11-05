@@ -15,5 +15,9 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "playwright": "^1.64.1"
+  },
+  "dependencies": {
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.5.438"
   }
 }

@@ -9,10 +9,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startMock } from './mock/server.mjs';
+import { makeDocx, makePdfs } from './fixtures.mjs';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist-test');
 let ctx, extId, mock, profile;
 const pages = [];
+// Every request any panel page makes (incl. its pdf.js worker), and any CSP refusal.
+const offPanelRequests = [];
+const cspRefusals = [];
 
 before(async () => {
   mock = await startMock();
@@ -48,6 +52,8 @@ async function openMock(path = '/new') {
 async function openPanel() {
   const p = await ctx.newPage();
   pages.push(p);
+  p.on('request', (r) => { if (!/^(chrome-extension|data|blob):/.test(r.url())) offPanelRequests.push(r.url()); });
+  p.on('console', (m) => { if (/Refused to|Content Security Policy/i.test(m.text())) cspRefusals.push(m.text()); });
   await p.goto(`chrome-extension://${extId}/panel/panel.html`);
   const ok = p.locator('#disclaimer-ok');
   if (await ok.isVisible()) await ok.click();
@@ -58,7 +64,21 @@ async function connected(panel) {
   await panel.locator('#status.ok').waitFor({ timeout: 8000 });
 }
 
+async function openAdd(panel) {
+  await panel.evaluate(() => {
+    for (const id of ['people-box', 'add-box']) document.getElementById(id).open = true;
+    for (const d of document.querySelectorAll('details.more')) d.open = true;
+  });
+}
+
+async function restorePasted(panel, text) {
+  await panel.evaluate(() => { for (const id of ['step3', 'paste-box']) document.getElementById(id).open = true; });
+  await panel.fill('#paste', text);
+  await panel.click('#restore-paste');
+}
+
 async function addPerson(panel, { first, firstOther = '', last = '', lastOther = '', gender = 'f', role = 'client' }) {
+  await openAdd(panel);
   await panel.selectOption('#add-kind', 'person');
   await panel.fill('input[name=first]', first);
   await panel.fill('input[name=firstOther]', firstOther);
@@ -70,6 +90,7 @@ async function addPerson(panel, { first, firstOther = '', last = '', lastOther =
 }
 
 async function addPlace(panel, kind, name) {
+  await openAdd(panel);
   await panel.selectOption('#add-kind', kind);
   await panel.fill('input[name=place]', name);
   await panel.click('#add-btn');
@@ -142,8 +163,7 @@ test('manual: anonymize the article, work in Claude, restore the final version',
   assert.ok(!restored.includes('Claude responded'));
 
   // Paste box: exact round trip.
-  await panel.fill('#paste', sent[0]);
-  await panel.click('#restore-paste');
+  await restorePasted(panel, sent[0]);
   await panel.waitForFunction((t) => document.querySelector('#restored').textContent === t, NOTE);
 
   // The claude.ai page never received a real identifier at any point.
@@ -155,8 +175,7 @@ test('manual: anonymize the article, work in Claude, restore the final version',
   await connected(panel2);
   await panel2.locator('#entities li[data-entity]').first().waitFor();
   assert.equal(await panel2.locator('#entities li[data-entity]').count(), 2);
-  await panel2.fill('#paste', sent[0]);
-  await panel2.click('#restore-paste');
+  await restorePasted(panel2, sent[0]);
   await panel2.waitForFunction((t) => document.querySelector('#restored').textContent === t, NOTE);
 });
 
@@ -184,8 +203,7 @@ test('copy anonymized commits the case without touching Claude', async () => {
   await panel.click('#copy-out');
   await panel.locator('#send-msg', { hasText: 'copied' }).waitFor();
   assert.equal(await page.evaluate(() => document.querySelector('[data-testid="chat-input"]').innerText.trim()), '');
-  await panel.fill('#paste', out);
-  await panel.click('#restore-paste');
+  await restorePasted(panel, out);
   await panel.waitForFunction(() => document.querySelector('#restored').textContent === 'מיכל הגיעה.');
 });
 
@@ -274,5 +292,75 @@ test('Hebrew UI is right-to-left', async () => {
   await panel.click('#lang');
   assert.equal(await panel.evaluate(() => document.documentElement.dir), 'rtl');
   assert.equal(await panel.locator('#status').textContent(), 'מחובר ל-Claude');
+  assert.match(await panel.locator('#version').textContent(), /^v\d+\.\d+\.\d+$/);
   await panel.click('#lang');
+});
+
+test('a long article becomes a Claude attachment: counted as done, never sent, never duplicated', async () => {
+  const page = await openMock();
+  const panel = await openPanel();
+  await connected(panel);
+  await addPerson(panel, { first: 'נועה' });
+  const article = Array.from({ length: 120 }, (_, i) => `${i + 1}. נועה סיפרה על השבוע שלה בבית הספר ובבית.`).join('\n\n');
+  await compose(panel, article);
+  await panel.click('#insert');
+  await panel.locator('#send-msg', { hasText: 'as an attachment' }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__sent), []);
+  assert.equal(await page.locator('[data-testid="file-thumbnail"]').count(), 1);
+  assert.equal(await page.evaluate(() => document.querySelector('[data-testid="chat-input"]').innerText.trim()), '');
+  assert.equal(await panel.evaluate(() => document.getElementById('step3').open), true, 'restore step opens');
+  await page.click('[data-testid="chat-input-send"]');
+  const [sent] = await page.evaluate(() => window.__sent);
+  assert.ok(!sent.includes('נועה') && sent.includes('120.'), 'the attachment carried the anonymized article');
+});
+
+async function loadFileInto(panel, name, mimeType, buffer) {
+  await panel.setInputFiles('#file', { name, mimeType, buffer });
+  await panel.locator('#file-msg').filter({ hasText: /Loaded|scan|read|big|Use a/ }).waitFor();
+  return panel.locator('#file-msg').textContent();
+}
+
+test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
+  await openMock();
+  const panel = await openPanel();
+  await connected(panel);
+  await addPerson(panel, { first: 'נועה', last: 'כהן' });
+  await addPlace(panel, 'town', 'קריית אונו');
+
+  let msg = await loadFileInto(panel, 'Noa report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', makeDocx());
+  assert.match(msg, /Loaded on this computer: Noa report\.docx/);
+  let article = await panel.inputValue('#compose');
+  assert.ok(article.includes('**נועה כהן** הגיעה עם אמה מקריית אונו.'), article);
+  assert.ok(article.includes('| שם | נועה כהן |'), 'table kept as Markdown');
+  let out = await panel.locator('#outgoing').textContent();
+  await panel.waitForFunction(() => document.querySelector('#outgoing').textContent.includes('|'));
+  out = await panel.locator('#outgoing').textContent();
+  for (const r of ['נועה', 'כהן', 'קריית אונו', '123456782']) assert.ok(!out.includes(r), `docx outgoing has ${r}`);
+
+  await panel.fill('#compose', '');
+  const { text: pdf, scan } = await makePdfs(ctx);
+  msg = await loadFileInto(panel, 'report.pdf', 'application/pdf', pdf);
+  assert.match(msg, /Loaded/);
+  article = await panel.inputValue('#compose');
+  assert.ok(article.includes('נועה כהן הגיעה עם אמה מקריית אונו.'), `Hebrew PDF in logical order: ${article}`);
+  assert.ok(article.includes('ספטמבר 2023'), article);
+  await panel.waitForFunction(() => document.querySelector('#outgoing').textContent.trim().length > 0);
+  await panel.waitForTimeout(350);
+  out = await panel.locator('#outgoing').textContent();
+  for (const r of ['נועה', 'כהן', 'קריית אונו', '123456782']) assert.ok(!out.includes(r), `pdf outgoing has ${r}`);
+
+  msg = await loadFileInto(panel, 'scan.pdf', 'application/pdf', scan);
+  assert.match(msg, /scan with no text/);
+
+  await panel.fill('#compose', 'קודם.');
+  msg = await loadFileInto(panel, 'note.txt', 'text/plain', Buffer.from('נועה הגיעה.\r\n'));
+  assert.equal(await panel.inputValue('#compose'), 'קודם.\n\nנועה הגיעה.', 'appended, line endings tidied');
+
+  msg = await loadFileInto(panel, 'x.xlsx', 'application/octet-stream', Buffer.from('x'));
+  assert.match(msg, /Use a \.docx/);
+});
+
+test('the panel never touched the network (pdf.js and mammoth included)', () => {
+  assert.deepEqual(offPanelRequests, []);
+  assert.deepEqual(cspRefusals, []);
 });
