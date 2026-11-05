@@ -27,7 +27,7 @@ const S = {
   suggestions: [],
   preview: null,        // last scrub()/autoScrub() result for the compose text
   restored: null,       // { text, spans, unresolved }
-  busy: false,          // a send is in flight: ignore conversation switches
+  busy: false,          // an insert is in flight
 };
 
 // ---------- helpers ----------
@@ -121,7 +121,6 @@ async function doRefresh() {
   S.tab = await findTargetTab();
   S.health = S.tab ? await ask('health') : { ok: false, reason: 'no-tab' };
   renderStatus();
-  if (S.busy) return;
   const conv = S.health.conversationId || null;
   if (S.tab && (S.health.ok || S.health.reason === 'loading')) await bindCase(conv);
   else if (!S.rec) await bindCase(null);
@@ -139,8 +138,19 @@ function freshRecord() {
 }
 
 async function bindCase(conversationId) {
-  const id = conversationId || `draft-tab${S.tab ? S.tab.id : 'none'}`;
+  const draftId = `draft-tab${S.tab ? S.tab.id : 'none'}`;
+  const id = conversationId || draftId;
   if (id === S.caseId) return;
+  // A new chat just got its id (the clinician sent in Claude): the draft case
+  // that anonymized the article becomes this conversation's case.
+  if (conversationId && S.caseId === draftId && S.rec && S.rec.used
+      && (await store.loadCase(conversationId)).status === 'missing') {
+    S.caseId = conversationId;
+    await persistNow();
+    await store.deleteCase(draftId);
+    renderAll();
+    return;
+  }
   if (S.caseId && S.rec) await persistNow();
   const r = await store.loadCase(id);
   S.caseNotice = null;
@@ -315,14 +325,14 @@ function renderCompose() {
   renderSendButton();
 }
 
-function canSend() {
-  return !!(S.health && S.health.ok && S.preview && !S.preview.error && !S.preview.residual.length && !S.busy);
+// Committing needs only a clean anonymized text; putting it into Claude also needs the page.
+function canCommit() {
+  return !!(S.preview && !S.preview.error && !S.preview.residual.length && !S.busy);
 }
 
 function renderSendButton() {
-  const b = $('send');
-  b.disabled = !canSend();
-  b.textContent = S.busy ? S.t.sending : S.t.send;
+  $('insert').disabled = !(canCommit() && S.health && S.health.ok);
+  $('copy-out').disabled = !canCommit();
 }
 
 function renderLegend() {
@@ -423,38 +433,49 @@ function setSugGender(k, g) {
   recompute(); renderCompose(); renderLegend();
 }
 
-async function onSend() {
-  // Never send a stale preview: rescrub the exact text now.
+// The case that produced these stand-ins is the one that must restore them,
+// so it is saved the moment the anonymized text leaves the panel.
+async function commit(result) {
+  S.rec.kase = result.case;
+  S.rec.used = true;
+  S.rec.compose = '';
+  $('compose').value = '';
+  S.unticked.clear();
+  S.genders.clear();
+  await persistNow();
   recompute();
+  renderAll();
+}
+
+function freshResult() {
+  recompute(); // never use a stale preview
   renderCompose();
-  if (!canSend()) return;
-  const result = S.preview;
+  return canCommit() ? S.preview : null;
+}
+
+async function onInsert() {
+  const result = freshResult();
+  if (!result || !(S.health && S.health.ok)) return;
   S.busy = true;
   renderSendButton();
   setMsg('send-msg', '');
   try {
-    const r = await ask('send', { text: result.text });
+    const r = await ask('insert', { text: result.text });
     if (!r.ok) { setMsg('send-msg', errText(r.reason), true); return; }
-    // The case that produced these surrogates is the one that must restore them.
-    S.rec.kase = result.case;
-    S.rec.compose = '';
-    $('compose').value = '';
-    const draftId = S.caseId;
-    if (r.conversationId && r.conversationId !== draftId) {
-      S.caseId = r.conversationId;
-      await store.saveCase(S.caseId, S.rec);
-      if (draftId.startsWith('draft-')) await store.deleteCase(draftId);
-    } else {
-      await persistNow();
-    }
-    S.unticked.clear();
-    S.genders.clear();
-    setMsg('send-msg', S.t.sent);
+    await commit(result);
+    setMsg('send-msg', S.t.inserted);
   } finally {
     S.busy = false;
-    recompute();
-    renderAll();
+    renderSendButton();
   }
+}
+
+async function onCopyOut() {
+  const result = freshResult();
+  if (!result) return;
+  await navigator.clipboard.writeText(result.text);
+  await commit(result);
+  setMsg('send-msg', S.t.copiedOut);
 }
 
 async function onBringBack() {
@@ -585,7 +606,8 @@ async function boot() {
     persistSoon();
     recomputeSoon();
   });
-  $('send').addEventListener('click', onSend);
+  $('insert').addEventListener('click', onInsert);
+  $('copy-out').addEventListener('click', onCopyOut);
   $('bring-back').addEventListener('click', onBringBack);
   $('restore-paste').addEventListener('click', onRestorePaste);
   $('copy').addEventListener('click', onCopy);

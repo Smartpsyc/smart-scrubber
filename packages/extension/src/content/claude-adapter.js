@@ -2,9 +2,9 @@
 // ALL claude.ai selectors live in this file. Selectors were captured in the
 // Phase 0 spike (2026-11-05); see docs/claude-scrubber-extension-plan.md.
 //
-// This script only ever receives text that the panel has already scrubbed.
-// It never restores anything into the page: "Bring back from Claude" reads the
-// last reply once and hands it to the panel.
+// This script only ever receives text that the panel has already anonymized.
+// It never sends and never restores anything into the page: the clinician sends
+// in Claude, and "Bring back" reads the last reply once and hands it to the panel.
 
 (() => {
   if (window.__scrubberAdapter) return;
@@ -14,8 +14,6 @@
   const SEL = {
     composer: '[data-testid="chat-input"][contenteditable="true"]',
     staticComposer: '[data-testid="static-composer-input"]',
-    send: '[data-testid="chat-input-send"]',
-    attachment: '[data-testid="file-thumbnail"]',
     row: '[data-testid="transcript-row"]',
     user: '[data-testid="user-message"]',
     assistant: '[data-testid="assistant-message"]',
@@ -27,7 +25,6 @@
   const squash = (s) => String(s || '').replace(/\s+/g, '');
   const conversationId = () => (location.pathname.match(/\/chat\/([0-9a-f]{8}-[0-9a-f-]{27})/i) || [])[1] || null;
   const composer = () => document.querySelector(SEL.composer);
-  const sendButton = () => document.querySelector(SEL.send);
 
   async function waitFor(fn, ms, step = 100) {
     const end = Date.now() + ms;
@@ -45,46 +42,30 @@
     return { ok: false, reason: document.querySelector(SEL.staticComposer) ? 'loading' : 'no-composer', ...base };
   }
 
-  function clearComposer(el) {
-    el.focus();
-    document.execCommand('selectAll');
-    document.execCommand('delete');
-  }
-
-  async function insertAndSend(text) {
+  // Put already-anonymized text into Claude's message box, AFTER anything the
+  // clinician has typed there (their own instructions). Never clicks Send.
+  async function insertText(text) {
     const el = composer();
     if (!el) return { ok: false, reason: 'no-composer' };
-    // Whatever is already in the box was typed straight into claude.ai and was
-    // never scrubbed. Refuse rather than send it along.
-    if (squash(el.innerText)) return { ok: false, reason: 'composer-not-empty' };
-    if (document.querySelector(SEL.attachment)) return { ok: false, reason: 'attachments-present' };
-
+    const before = el.innerText;
+    const expected = squash(before) + squash(text);
     el.focus();
+    const sel = window.getSelection();
+    const end = document.createRange();
+    end.selectNodeContents(el);
+    end.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(end);
+    const body = squash(before) ? '\n\n' + text : text;
     const dt = new DataTransfer();
-    dt.setData('text/plain', text);
+    dt.setData('text/plain', body);
     el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-    let landed = await waitFor(() => squash(el.innerText) === squash(text), 1500);
-    if (!landed) {
-      clearComposer(el);
-      document.execCommand('insertText', false, text);
-      landed = await waitFor(() => squash(el.innerText) === squash(text), 1500);
+    let landed = await waitFor(() => squash(el.innerText) === expected, 1500);
+    if (!landed && squash(el.innerText) === squash(before)) {
+      document.execCommand('insertText', false, body);
+      landed = await waitFor(() => squash(el.innerText) === expected, 1500);
     }
-    if (!landed) {
-      clearComposer(el);
-      return { ok: false, reason: 'insert-mismatch' };
-    }
-
-    const btn = await waitFor(() => { const b = sendButton(); return b && !b.disabled ? b : null; }, 3000);
-    if (!btn) {
-      clearComposer(el);
-      return { ok: false, reason: 'no-send' };
-    }
-    const before = location.pathname;
-    btn.click();
-    const sent = await waitFor(() => location.pathname !== before || !squash(composer()?.innerText), 10000);
-    if (!sent) return { ok: false, reason: 'send-unconfirmed' };
-    const id = await waitFor(conversationId, 5000);
-    return { ok: true, conversationId: id };
+    return landed ? { ok: true } : { ok: false, reason: 'insert-mismatch' };
   }
 
   // ---------- reading a reply (on click only) ----------
@@ -176,7 +157,7 @@
 
   const handlers = {
     health: async () => health(),
-    send: async (msg) => insertAndSend(String(msg.text || '')),
+    insert: async (msg) => insertText(String(msg.text || '')),
     readLast: async () => readLastAssistant(),
   };
 

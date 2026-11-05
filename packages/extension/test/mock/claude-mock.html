@@ -50,7 +50,7 @@
     ed.addEventListener('input', sync);
     wrap.replaceChildren(ed);
   }
-  const text = () => [...ed.querySelectorAll('p')].map((p) => p.textContent).join('\n') || ed.innerText;
+  const text = () => ed.innerText.replace(/\n{3,}/g, '\n\n').trim();
   function sync() { send.disabled = !ed.innerText.trim(); }
   makeComposer();
 

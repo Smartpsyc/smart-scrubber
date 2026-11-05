@@ -26,7 +26,7 @@
 
   <section class="card" aria-labelledby="case-h">
     <div class="row between">
-      <h2 id="case-h" data-i18n="caseTitle"></h2>
+      <h2 id="case-h" data-i18n="step1Title"></h2>
       <div class="seg" role="radiogroup">
         <button type="button" role="radio" id="mode-manual" data-mode="manual" data-i18n="modeManual"></button>
         <button type="button" role="radio" id="mode-auto" data-mode="auto" data-i18n="modeAuto"></button>
@@ -84,6 +84,7 @@
 
   <section class="card" aria-labelledby="compose-h">
     <h2 id="compose-h" data-i18n="composeTitle"></h2>
+    <p class="hint" data-i18n="composeHint"></p>
     <textarea id="compose" dir="auto" rows="7" data-i18n-ph="composePlaceholder"></textarea>
 
     <div id="suggestions-wrap" hidden>
@@ -100,20 +101,20 @@
 
     <div id="residual" class="notice danger" hidden></div>
     <div class="row">
-      <button type="button" id="send" class="primary" data-i18n="send"></button>
+      <button type="button" id="insert" class="primary" data-i18n="insert"></button>
+      <button type="button" id="copy-out" data-i18n="copyOut"></button>
       <span id="send-msg" class="msg" role="status"></span>
     </div>
   </section>
 
   <section class="card" aria-labelledby="legend-h">
-    <details id="legend-box">
-      <summary><h2 id="legend-h" data-i18n="legendTitle"></h2></summary>
-      <ul id="legend" class="legend"></ul>
-    </details>
+    <h2 id="legend-h" data-i18n="step2Title"></h2>
+    <p class="hint" data-i18n="step2Hint"></p>
+    <ul id="legend" class="legend"></ul>
   </section>
 
   <section class="card" aria-labelledby="restore-h">
-    <h2 id="restore-h" data-i18n="restoreTitle"></h2>
+    <h2 id="restore-h" data-i18n="step3Title"></h2>
     <div class="row">
       <button type="button" id="bring-back" data-i18n="bringBack"></button>
       <span id="restore-msg" class="msg" role="status"></span>

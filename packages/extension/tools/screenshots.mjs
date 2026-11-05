@@ -15,12 +15,11 @@ await p.fill('input[name=first]', 'נועה'); await p.fill('input[name=firstOth
 await p.selectOption('#add-kind', 'town'); await p.fill('input[name=place]', 'קריית אונו'); await p.click('#add-btn');
 await p.fill('#compose', 'נועה כהן הגיעה עם אמה רחל מקריית אונו. ת.ז. 123456782, נולדה 12/03/2015.\nנועה סיפרה שהיא ישנה רע.');
 await p.waitForTimeout(500);
-await p.locator('#legend-box summary').click();
 await p.screenshot({ path: join(out, 'panel-1-manual.png'), fullPage: true });
 await p.click('#mode-auto'); await p.waitForTimeout(500);
 await p.click('#lang'); await p.waitForTimeout(200);
 await p.screenshot({ path: join(out, 'panel-2-auto-he.png'), fullPage: true });
-await p.click('#send'); await page.locator('[data-testid="message-actions"]').waitFor({ state: 'attached' });
+await p.click('#insert'); await p.waitForTimeout(300); await page.click('[data-testid="chat-input-send"]'); await page.locator('[data-testid="message-actions"]').waitFor({ state: 'attached' });
 await p.click('#bring-back'); await p.locator('#restored-wrap').waitFor();
 await p.screenshot({ path: join(out, 'panel-3-restored-he.png'), fullPage: true });
 await ctx.close(); mock.server.close();

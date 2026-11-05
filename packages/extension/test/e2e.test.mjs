@@ -82,10 +82,18 @@ async function compose(panel, text) {
   return panel.locator('#outgoing').textContent();
 }
 
+// Panel puts the article into Claude's box; the clinician sends it from the page.
+async function insertAndSend(panel, page) {
+  await panel.click('#insert');
+  await panel.locator('#send-msg', { hasText: "It's in Claude's message box" }).waitFor();
+  await page.click('[data-testid="chat-input-send"]');
+  await page.waitForURL(/\/chat\//);
+}
+
 const REAL = ['נועה', 'כהן', 'Noa', 'קריית אונו', '123456782', '052-1234567'];
 const NOTE = 'נועה כהן (Noa) הגיעה עם אמה מקריית אונו. ת.ז. 123456782, טלפון 052-1234567.\n\nנועה סיפרה שהיא ישנה רע.';
 
-test('manual: scrubs before send, encrypts the case, restores on request', async () => {
+test('manual: anonymize the article, work in Claude, restore the final version', async () => {
   const page = await openMock();
   const panel = await openPanel();
   await connected(panel);
@@ -100,8 +108,12 @@ test('manual: scrubs before send, encrypts the case, restores on request', async
   for (const r of REAL) assert.ok(!outgoing.includes(r), `outgoing still has ${r}`);
   assert.ok(await panel.locator('#preview mark.k-person').count() >= 3);
 
-  await panel.click('#send');
-  await panel.locator('#send-msg', { hasText: 'Sent.' }).waitFor();
+  // Never auto-sends: the text waits in Claude's box.
+  await panel.click('#insert');
+  await panel.locator('#send-msg', { hasText: "It's in Claude's message box" }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__sent), []);
+  await page.click('[data-testid="chat-input-send"]');
+  await page.waitForURL(/\/chat\//);
 
   const sent = await page.evaluate(() => window.__sent);
   assert.equal(sent.length, 1);
@@ -110,7 +122,8 @@ test('manual: scrubs before send, encrypts the case, restores on request', async
   const conv = new URL(page.url()).pathname.split('/')[2];
   assert.match(conv, /^[0-9a-f-]{36}$/);
 
-  // Encrypted at rest, keyed by the conversation, draft gone.
+  // Encrypted at rest, moved to the conversation once Claude gave it an id, draft gone.
+  await panel.waitForFunction((c) => chrome.storage.local.get(`case:${c}`).then((r) => !!r[`case:${c}`]), conv);
   const all = await panel.evaluate(() => chrome.storage.local.get(null));
   assert.ok(all[`case:${conv}`], 'case saved under the conversation id');
   assert.ok(!Object.keys(all).some((k) => k.startsWith('case:draft-')), 'draft removed');
@@ -147,18 +160,33 @@ test('manual: scrubs before send, encrypts the case, restores on request', async
   await panel2.waitForFunction((t) => document.querySelector('#restored').textContent === t, NOTE);
 });
 
-test('fails closed when the composer already has unscrubbed text', async () => {
+test("adds the article after the clinician's own instructions in Claude's box", async () => {
   const page = await openMock();
   await page.click('[data-testid="chat-input"]');
-  await page.keyboard.type('typed straight into claude');
+  await page.keyboard.type('Please shorten this article:');
   const panel = await openPanel();
   await connected(panel);
   await addPerson(panel, { first: 'דנה' });
   await compose(panel, 'דנה הגיעה.');
-  await panel.click('#send');
-  await panel.locator('#send-msg.err').waitFor();
-  assert.match(await panel.locator('#send-msg').textContent(), /already has text/);
-  assert.deepEqual(await page.evaluate(() => window.__sent), []);
+  await insertAndSend(panel, page);
+  const [sent] = await page.evaluate(() => window.__sent);
+  assert.ok(sent.startsWith('Please shorten this article:'), sent);
+  assert.ok(!sent.includes('דנה'), sent);
+  assert.match(sent, /הגיעה\.$/);
+});
+
+test('copy anonymized commits the case without touching Claude', async () => {
+  const page = await openMock();
+  const panel = await openPanel();
+  await connected(panel);
+  await addPerson(panel, { first: 'מיכל' });
+  const out = await compose(panel, 'מיכל הגיעה.');
+  await panel.click('#copy-out');
+  await panel.locator('#send-msg', { hasText: 'copied' }).waitFor();
+  assert.equal(await page.evaluate(() => document.querySelector('[data-testid="chat-input"]').innerText.trim()), '');
+  await panel.fill('#paste', out);
+  await panel.click('#restore-paste');
+  await panel.waitForFunction(() => document.querySelector('#restored').textContent === 'מיכל הגיעה.');
 });
 
 test("fails closed when Claude's page structure is unknown", async () => {
@@ -169,7 +197,8 @@ test("fails closed when Claude's page structure is unknown", async () => {
   await addPerson(panel, { first: 'דנה' });
   await panel.fill('#compose', 'דנה הגיעה.');
   await panel.waitForTimeout(400);
-  assert.equal(await panel.locator('#send').isDisabled(), true);
+  assert.equal(await panel.locator('#insert').isDisabled(), true);
+  assert.equal(await panel.locator('#copy-out').isDisabled(), false, 'copy needs no page');
 });
 
 test('bring back waits for Claude to finish writing', async () => {
@@ -178,8 +207,7 @@ test('bring back waits for Claude to finish writing', async () => {
   await connected(panel);
   await addPerson(panel, { first: 'אורי', gender: 'm' });
   await compose(panel, 'אורי הגיע.');
-  await panel.click('#send');
-  await panel.locator('#send-msg', { hasText: 'Sent.' }).waitFor();
+  await insertAndSend(panel, page);
   await page.waitForFunction(() => typeof window.__finish === 'function');
   await panel.click('#bring-back');
   await panel.locator('#restore-msg.err', { hasText: 'still writing' }).waitFor();
@@ -209,8 +237,7 @@ test('auto mode: suggestions are scrubbed unless unticked, and join the case on 
 
   await chip.locator('input[type=checkbox]').check();
   await panel.waitForFunction(() => !document.querySelector('#outgoing').textContent.includes('שירה'));
-  await panel.click('#send');
-  await panel.locator('#send-msg', { hasText: 'Sent.' }).waitFor();
+  await insertAndSend(panel, page);
   const sent = await page.evaluate(() => window.__sent[0]);
   for (const r of ['רחל', 'לוי', 'חיפה', 'שירה']) assert.ok(!sent.includes(r), `sent ${r}`);
   const names = await panel.locator('#entities').textContent();
