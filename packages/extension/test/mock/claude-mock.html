@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mock Claude</title>
+<style>
+  body { font: 14px system-ui; margin: 20px; }
+  [data-testid="chat-input"] { border: 1px solid #999; min-height: 40px; padding: 6px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<!--
+  Mimics the parts of claude.ai the adapter touches (selectors from the Phase 0
+  spike, 2026-11-05). Behaviour switches via the query string:
+    ?broken=1  → no chat-input (adapter health must fail closed)
+    ?slow=1    → the reply keeps streaming until window.__finish() is called
+-->
+<div data-testid="transcript-list" id="transcript"></div>
+<div id="composer-wrap"></div>
+<button type="button" data-testid="chat-input-send" aria-label="Send message" disabled>Send</button>
+
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  window.__sent = [];
+  window.__finish = null;
+  const wrap = document.getElementById('composer-wrap');
+  const send = document.querySelector('[data-testid="chat-input-send"]');
+  const transcript = document.getElementById('transcript');
+
+  let ed;
+  function makeComposer() {
+    ed = document.createElement('div');
+    ed.contentEditable = 'true';
+    ed.setAttribute('role', 'textbox');
+    ed.className = 'tiptap ProseMirror';
+    if (!q.has('broken')) ed.setAttribute('data-testid', 'chat-input');
+    // Like ProseMirror: handle paste ourselves, one <p> per line.
+    ed.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      for (const line of text.split('\n')) {
+        const p = document.createElement('p');
+        if (line) p.textContent = line; else p.append(document.createElement('br'));
+        ed.append(p);
+      }
+      sync();
+    });
+    ed.addEventListener('input', sync);
+    wrap.replaceChildren(ed);
+  }
+  const text = () => [...ed.querySelectorAll('p')].map((p) => p.textContent).join('\n') || ed.innerText;
+  function sync() { send.disabled = !ed.innerText.trim(); }
+  makeComposer();
+
+  function row(kind, html) {
+    const r = document.createElement('div');
+    r.setAttribute('data-testid', 'transcript-row');
+    r.innerHTML = html;
+    transcript.append(r);
+    return r;
+  }
+
+  send.addEventListener('click', () => {
+    const msg = text();
+    window.__sent.push(msg);
+    for (const r of transcript.querySelectorAll('[data-last-message]')) r.removeAttribute('data-last-message');
+    const u = row('user', '<div data-testid="user-message"></div>');
+    u.querySelector('[data-testid="user-message"]').textContent = msg;
+    if (location.pathname === '/new') history.pushState({}, '', '/chat/' + crypto.randomUUID());
+    makeComposer();
+    sync();
+
+    setTimeout(() => {
+      const a = row('assistant', '<div data-testid="assistant-message"><h3 class="sr-only">Claude responded: …</h3><div class="body"></div></div>');
+      a.setAttribute('data-last-message', 'true');
+      a.setAttribute('data-perf-row-streaming', 'true');
+      const finish = () => {
+        // Echo the (scrubbed) message back inside some markdown structure.
+        const first = msg.split('\n')[0];
+        const md = document.createElement('div');
+        md.className = 'standard-markdown';
+        md.innerHTML = '<h2>Summary</h2><p></p><ul><li></li><li>Second point</li></ul><p>Full text:</p><blockquote><p></p></blockquote>';
+        md.querySelector('p').textContent = first;
+        md.querySelector('li').innerHTML = '<strong></strong> is the key point';
+        md.querySelector('li strong').textContent = first.split(/\s+/)[0];
+        md.querySelector('blockquote p').textContent = msg;
+        a.querySelector('.body').append(md);
+        const actions = document.createElement('div');
+        actions.setAttribute('data-testid', 'message-actions');
+        a.append(actions);
+        a.setAttribute('data-perf-row-streaming', 'false');
+      };
+      if (q.has('slow')) window.__finish = finish; else setTimeout(finish, 150);
+    }, 100);
+  });
+})();
+</script>
+</body>
+</html>

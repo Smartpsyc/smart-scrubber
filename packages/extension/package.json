@@ -1,0 +1,19 @@
+{
+  "name": "scrubber-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension (MV3 side panel) that scrubs identifiers before text reaches claude.ai and restores them on request.",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "build:test": "node tools/build.mjs --test",
+    "test": "node tools/build.mjs --test && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

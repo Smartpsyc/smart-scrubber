@@ -1,0 +1,26 @@
+// Panel screenshots for docs / the store listing: node tools/screenshots.mjs <out-dir> (after npm run build:test).
+import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
+import { chromium } from 'playwright'; import { startMock } from '../test/mock/server.mjs';
+const out = process.argv[2];
+const mock = await startMock();
+const dist = new URL('../dist-test', import.meta.url).pathname;
+const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'shot-')), { channel: 'chromium', headless: true, locale: 'en-US', viewport: { width: 400, height: 1500 }, args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`] });
+let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker');
+const page = await ctx.newPage(); await page.goto(mock.origin + '/new');
+const p = await ctx.newPage(); await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html`);
+await p.locator('#status.ok').waitFor();
+await p.screenshot({ path: join(out, 'panel-0-first-run.png'), fullPage: true });
+await p.click('#disclaimer-ok');
+await p.fill('input[name=first]', 'נועה'); await p.fill('input[name=firstOther]', 'Noa'); await p.fill('input[name=last]', 'כהן'); await p.click('#add-btn');
+await p.selectOption('#add-kind', 'town'); await p.fill('input[name=place]', 'קריית אונו'); await p.click('#add-btn');
+await p.fill('#compose', 'נועה כהן הגיעה עם אמה רחל מקריית אונו. ת.ז. 123456782, נולדה 12/03/2015.\nנועה סיפרה שהיא ישנה רע.');
+await p.waitForTimeout(500);
+await p.locator('#legend-box summary').click();
+await p.screenshot({ path: join(out, 'panel-1-manual.png'), fullPage: true });
+await p.click('#mode-auto'); await p.waitForTimeout(500);
+await p.click('#lang'); await p.waitForTimeout(200);
+await p.screenshot({ path: join(out, 'panel-2-auto-he.png'), fullPage: true });
+await p.click('#send'); await page.locator('[data-testid="message-actions"]').waitFor({ state: 'attached' });
+await p.click('#bring-back'); await p.locator('#restored-wrap').waitFor();
+await p.screenshot({ path: join(out, 'panel-3-restored-he.png'), fullPage: true });
+await ctx.close(); mock.server.close();

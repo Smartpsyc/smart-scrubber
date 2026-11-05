@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Scrubber",
+  "short_name": "Scrubber",
+  "version": "0.1.0",
+  "description": "Swaps names and identifiers for stand-ins before your text reaches claude.ai, and restores them only when you ask. Runs locally.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "storage"],
+  "host_permissions": ["https://claude.ai/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel/panel.html" },
+  "action": { "default_title": "Open the scrubber" },
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content/claude-adapter.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'none'"
+  }
+}

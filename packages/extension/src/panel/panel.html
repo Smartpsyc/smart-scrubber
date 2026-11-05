@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Scrubber</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><strong data-i18n="appName"></strong> <span class="muted" data-i18n="by"></span></div>
+    <div class="bar-actions">
+      <button type="button" id="lang" class="ghost"></button>
+      <button type="button" id="open-settings" class="ghost" data-i18n-title="settings" aria-haspopup="dialog">⚙</button>
+    </div>
+  </header>
+
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+
+  <section id="disclaimer" class="notice" hidden>
+    <p data-i18n="disclaimer"></p>
+    <button type="button" id="disclaimer-ok" data-i18n="disclaimerOk"></button>
+  </section>
+
+  <div id="case-notice" class="notice warn" hidden></div>
+
+  <section class="card" aria-labelledby="case-h">
+    <div class="row between">
+      <h2 id="case-h" data-i18n="caseTitle"></h2>
+      <div class="seg" role="radiogroup">
+        <button type="button" role="radio" id="mode-manual" data-mode="manual" data-i18n="modeManual"></button>
+        <button type="button" role="radio" id="mode-auto" data-mode="auto" data-i18n="modeAuto"></button>
+      </div>
+    </div>
+    <p id="mode-hint" class="hint"></p>
+    <p id="draft-hint" class="hint" data-i18n="newChatCase" hidden></p>
+
+    <h3 data-i18n="declared"></h3>
+    <ul id="entities" class="chips"></ul>
+
+    <form id="add-form" class="add-form" autocomplete="off">
+      <div class="row">
+        <select id="add-kind" aria-label="kind">
+          <option value="person" data-i18n="kindPerson"></option>
+          <option value="town" data-i18n="kindTown"></option>
+          <option value="school" data-i18n="kindSchool"></option>
+          <option value="job" data-i18n="kindJob"></option>
+          <option value="other" data-i18n="kindOther"></option>
+        </select>
+      </div>
+      <div class="fields" data-for="person">
+        <label><span data-i18n="firstName"></span><input name="first" dir="auto"></label>
+        <label><span data-i18n="firstOther"></span><input name="firstOther" dir="auto"></label>
+        <label><span data-i18n="lastName"></span><input name="last" dir="auto"></label>
+        <label><span data-i18n="lastOther"></span><input name="lastOther" dir="auto"></label>
+        <label class="wide"><span data-i18n="nicknames"></span><input name="nicknames" dir="auto"></label>
+        <label><span data-i18n="gender"></span>
+          <select name="gender">
+            <option value="f" data-i18n="female"></option>
+            <option value="m" data-i18n="male"></option>
+            <option value="x" data-i18n="unknown"></option>
+          </select>
+        </label>
+        <label><span data-i18n="role"></span><select name="role" id="role-select"></select></label>
+      </div>
+      <div class="fields" data-for="town school">
+        <label><span data-i18n="placeName"></span><input name="place" dir="auto"></label>
+        <label><span data-i18n="placeOther"></span><input name="placeOther" dir="auto"></label>
+      </div>
+      <div class="fields" data-for="job">
+        <label><span data-i18n="jobTitle"></span><input name="job" dir="auto"></label>
+        <label><span data-i18n="replaceWith"></span><input name="jobReplace" dir="auto"></label>
+      </div>
+      <div class="fields" data-for="other">
+        <label><span data-i18n="otherText"></span><input name="other" dir="auto"></label>
+        <label><span data-i18n="replaceWith"></span><input name="otherReplace" dir="auto"></label>
+      </div>
+      <div class="row">
+        <button type="submit" id="add-btn" data-i18n="add"></button>
+        <span id="add-error" class="error" role="alert"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="compose-h">
+    <h2 id="compose-h" data-i18n="composeTitle"></h2>
+    <textarea id="compose" dir="auto" rows="7" data-i18n-ph="composePlaceholder"></textarea>
+
+    <div id="suggestions-wrap" hidden>
+      <h3 data-i18n="suggestionsTitle"></h3>
+      <ul id="suggestions" class="chips"></ul>
+    </div>
+
+    <h3 data-i18n="previewTitle"></h3>
+    <p class="hint" data-i18n="previewHint"></p>
+    <div id="preview" class="textbox" dir="auto" data-testid="preview"></div>
+
+    <h3 data-i18n="outgoingTitle"></h3>
+    <div id="outgoing" class="textbox outgoing" dir="auto" data-testid="outgoing"></div>
+
+    <div id="residual" class="notice danger" hidden></div>
+    <div class="row">
+      <button type="button" id="send" class="primary" data-i18n="send"></button>
+      <span id="send-msg" class="msg" role="status"></span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="legend-h">
+    <details id="legend-box">
+      <summary><h2 id="legend-h" data-i18n="legendTitle"></h2></summary>
+      <ul id="legend" class="legend"></ul>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="restore-h">
+    <h2 id="restore-h" data-i18n="restoreTitle"></h2>
+    <div class="row">
+      <button type="button" id="bring-back" data-i18n="bringBack"></button>
+      <span id="restore-msg" class="msg" role="status"></span>
+    </div>
+    <p class="hint" data-i18n="pasteHint"></p>
+    <textarea id="paste" dir="auto" rows="3"></textarea>
+    <button type="button" id="restore-paste" data-i18n="restorePasted"></button>
+
+    <div id="restored-wrap" hidden>
+      <h3 data-i18n="restoredTitle"></h3>
+      <div id="restored" class="textbox" dir="auto" data-testid="restored"></div>
+      <div id="unresolved" class="notice warn" hidden></div>
+      <div class="row">
+        <button type="button" id="copy" data-i18n="copy"></button>
+        <button type="button" id="export" data-i18n="exportMd"></button>
+      </div>
+    </div>
+  </section>
+
+  <div id="tag-menu" class="tag-menu" role="menu" hidden>
+    <span class="muted" data-i18n="tagAs"></span>
+    <button type="button" role="menuitem" data-tag="f" data-i18n="tagFemale"></button>
+    <button type="button" role="menuitem" data-tag="m" data-i18n="tagMale"></button>
+    <button type="button" role="menuitem" data-tag="town" data-i18n="tagPlace"></button>
+    <button type="button" role="menuitem" data-tag="school" data-i18n="tagSchool"></button>
+    <button type="button" role="menuitem" data-tag="other" data-i18n="tagOther"></button>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2 data-i18n="settings"></h2>
+      <label><span data-i18n="retention"></span><input type="number" id="retention" min="1" max="365"></label>
+      <label><span data-i18n="community"></span>
+        <select id="community">
+          <option value="general" data-i18n="communityGeneral"></option>
+          <option value="arab" data-i18n="communityArab"></option>
+        </select>
+      </label>
+      <p class="hint" data-i18n="disclaimer"></p>
+      <div class="row between">
+        <button type="button" id="delete-case" class="quiet-danger" data-i18n="deleteCase"></button>
+        <button value="close" data-i18n="close"></button>
+      </div>
+      <span id="settings-msg" class="msg"></span>
+    </form>
+  </dialog>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>
