@@ -6,7 +6,7 @@
 import {
   FIRST_NAMES, SURNAMES, WORD_NAMES_HE, WORD_NAMES_EN, STOP_HE, PERSON_CUES_HE, PERSON_CUES_EN,
   SURNAME_CUES_HE, TOWN_CUES_HE, TOWN_CUES_EN, FEM_MARKERS, MASC_MARKERS, SCHOOL_HEAD_RE_HE,
-  SCHOOL_ADJ_HE, SCHOOL_TAIL_RE_EN, TOWN_DISTINCTIVE_HE,
+  SCHOOL_ADJ_HE, SCHOOL_TAIL_RE_EN, TOWN_DISTINCTIVE_HE, SURNAME_SUFFIX_RE_HE, PERSON_TITLES_HE,
 } from './lexicon.js';
 import { REGISTRY_NAMES } from './registry.js';
 import { LOCALITIES } from './localities.js';
@@ -184,7 +184,7 @@ export function suggest(text, kase = null) {
   const surnameAt = (j, strict = true) => {
     const t = toks[j];
     if (!t || !t.adjacent || inDate(t)) return false;
-    if (t.he) return I.surHe.has(t.n) && !STOP_HE.has(t.n);
+    if (t.he) return !STOP_HE.has(t.n) && (I.surHe.has(t.n) || (SURNAME_SUFFIX_RE_HE.test(t.n) && plainWord(t)));
     if (t.la) {
       const n = stripPoss(t.n);
       if (I.surEn.has(n)) return isCap(t.raw);
@@ -192,6 +192,15 @@ export function suggest(text, kase = null) {
     }
     return false;
   };
+
+  // A word that could be a name: not a function word, verb, cue or month,
+  // under any prefix reading ("והוא", "שאמרה").
+  const plainWord = (t) => t && t.he && !t.num && !inDate(t) && t.n.length >= 2
+    && prefixVariants(t).every((v) => !STOP_HE.has(v.base) && !COMMON_HE.has(v.base) && !(v.base in PERSON_CUES_HE)
+      && !FEM_MARKERS.has(v.base) && !MASC_MARKERS.has(v.base) && !I.months.has(v.base));
+  // After a title the next word is a surname even when no list knows it:
+  // "ד"ר ולריה זלוצקי", "ד"ר זלוצקי".
+  const titleSurnameAt = (j) => { const t = toks[j]; return !!(t && t.adjacent && plainWord(t) && !I.firstHe.has(t.n)); };
 
   // Cue words may carry ו/ש/ל ("ולאמו", "שאמו"); ב/מ/כ/ה only on longer
   // words ("באביו") — "מבנה" is "structure", not מ+בנה. An adjective may sit
@@ -270,9 +279,15 @@ export function suggest(text, kase = null) {
           addSurnameOnly({ i, script: 'he', g, reason: 'cue:' + cue, conf: 'high' });
           continue;
         }
+        const title = PERSON_TITLES_HE.test(cue);
         const entry = I.firstHe.get(t.n);
         if (entry || REGISTRY_NAMES.has(t.n)) {
-          addPerson({ entry, form: t.raw, script: 'he', g, i, reason: 'cue:' + cue, conf: entry ? 'high' : 'medium', lastTok: surnameAt(i + 1) ? i + 1 : null });
+          const withLast = surnameAt(i + 1) || (title && titleSurnameAt(i + 1));
+          addPerson({ entry, form: t.raw, script: 'he', g, i, reason: 'cue:' + cue, conf: entry ? 'high' : 'medium', lastTok: withLast ? i + 1 : null });
+          continue;
+        }
+        if (title && plainWord(t)) {
+          addSurnameOnly({ i, script: 'he', g, reason: 'cue:' + cue, conf: SURNAME_SUFFIX_RE_HE.test(t.n) ? 'high' : 'medium' });
           continue;
         }
       }
@@ -427,6 +442,8 @@ export function suggest(text, kase = null) {
     while (toks[j] && SCHOOL_ADJ_HE.has(toks[j].n) && /^[  ]+$/.test(toks[j].gap)) j++;
     const c = toks[j];
     if (!c || !c.he || c.num || !/^[  "״'׳]+$/.test(c.gap) || STOP_HE.has(c.n) || COMMON_HE.has(c.n) || inDate(c)) continue;
+    // "בית הספר ולכניסה…": a conjunction, not a school name (unless the word is itself a name: "ויצמן").
+    if (/^ו/.test(c.n) && !(REGISTRY_NAMES.has(c.n) || I.surHe.has(c.n) || I.loc.has(c.n))) continue;
     const head = m[1].replace(/\s+/g, ' ');
     if (head === 'גן' && !(REGISTRY_NAMES.has(c.n) || I.loc.has(c.n) || /["״]/.test(c.gap))) {
       // "בגן" is usually just "in the kindergarten"; only accept a known name or a quoted one.

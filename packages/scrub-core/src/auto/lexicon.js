@@ -159,7 +159,12 @@ export const MASC_MARKERS = new Set(`הוא,בן,ילד,תלמיד,הגיע,אמ
 קם,הלך,בא,חזר,נולד,גדל,מטופל,מאובחן,he,him,his,himself`.split(/[,\s]+/).filter(Boolean));
 
 // Institution heads (schools) and the adjectives that may sit between head and name.
-export const SCHOOL_HEAD_RE_HE = /(?<![\p{L}\p{M}])(?:ו?[בלמה]?)(בית\s+הספר|בית\s+ספר|ביה["״]ס|בי["״]ס|תיכון|חטיבת\s+הביניים|חטיבת\s+ביניים|גן\s+הילדים|גן\s+ילדים|גן|ישיבת|אולפנת|מכללת|ישיבה\s+תיכונית)(?![\p{L}\p{M}])/gu;
+export const SCHOOL_HEAD_RE_HE = /(?<![\p{L}\p{M}])(?:ו?[בלמה]?)(בית\s+הספר|בית\s+ספר|ביה["״]ס|בי["״]ס|תיכון|חטיבת\s+הביניים|חטיבת\s+ביניים|גן\s+הילדים|גן\s+ילדים|גן|ישיבת|אולפנת|מכללת|ישיבה\s+תיכונית|ת["״]ת|ת['׳]{2}ת|תלמוד\s+(?:ה)?תורה)(?![\p{L}\p{M}])/gu;
+// Surname endings common in Israeli (Ashkenazi, Russian, Georgian, Armenian)
+// surnames missing from the list: "זלוצקי", "רבינוביץ'", "גוגיטידזה".
+export const SURNAME_SUFFIX_RE_HE = /.{2,}(?:סקי|צקי|סקאיה|צקאיה|וביץ['׳]?|ביץ['׳]|שטיין|שטין|בורג|ברג|שוילי|דזה|ינקו|ונקו|אייב|ייבה|ובסקי)$/u;
+export const PERSON_TITLES_HE = /^(?:ד["״]ר|דר['׳]|פרופ['׳]|פרופסור|עו["״]ד|גב['׳]|גברת|מר|הרב|הרבנית|דוקטור)$/u;
+
 export const SCHOOL_ADJ_HE = new Set(`היסודי,הממלכתי,הממ"ד,הממ״ד,הדתי,העירוני,האזורי,המקיף,החדש,הישן,הקהילתי,הניסויי,
 הדמוקרטי,הפתוח,העל-יסודי,התיכון,יסודי,ממלכתי,ממ"ד,ממ״ד,דתי,מקיף,אזורי,עירוני,קהילתי,ניסויי,דמוקרטי,ע"ש,ע״ש,על`.split(/[,\s]+/).filter(Boolean));
 export const SCHOOL_TAIL_RE_EN = /((?:[A-Z][\p{L}'’-]+\s+){1,3})(Elementary School|Middle School|High School|Primary School|Junior High|Academy|Kindergarten|Preschool|School)\b/gu;

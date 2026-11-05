@@ -93,6 +93,35 @@ test('schools: head + name, adjectives skipped, "בגן" alone ignored', () => {
   assert.deepEqual(sch('לומדת בבית הספר היסודי אלונים'), ['בית הספר אלונים']);
   assert.deepEqual(sch('בגן היה רועש, ובגן קשה לה'), []);
   assert.deepEqual(sch('He attends Lincoln Elementary School.'), ['Lincoln Elementary School']);
+  // A conjunction after the head is not a name; a ו-name still is.
+  assert.deepEqual(sch('הגיע לבית הספר ולכניסה לשיעורים מסוימים'), []);
+  assert.deepEqual(sch('הגיע לבית הספר ויצמן'), ['בית הספר ויצמן']);
+  // Talmud Torah, in every common spelling.
+  assert.deepEqual(sch('לומד בת׳׳ת אבנריה'), ['ת׳׳ת אבנריה']);
+  assert.deepEqual(sch('לומד בת"ת אבנריה'), ['ת"ת אבנריה']);
+  assert.deepEqual(sch('לומד בת״ת סאטמר'), ['ת״ת סאטמר']);
+  assert.deepEqual(sch('לומד בתלמוד תורה אבנריה'), ['תלמוד תורה אבנריה']);
+});
+
+test('a Talmud Torah written two ways in one note is hidden both times', () => {
+  const r = autoScrub('לומד בת׳׳ת אבנריה. בת"ת אבנריה מרוצים ממנו.', createCase({ seed: 'tt' }));
+  assert.ok(!r.text.includes('אבנריה'), r.text);
+  assert.match(r.text, /^לומד בת׳׳ת \S+\. בת"ת \S+ מרוצים/);
+});
+
+test('surnames after a title, even ones no list knows', () => {
+  const ppl = (t) => suggest(t).suggestions.filter((x) => x.kind === 'person')
+    .map((x) => [(x.entity.first?.he || []).join(), (x.entity.last?.he || []).join()]);
+  assert.deepEqual(ppl('נמצא במעקב ד"ר ולריה זלוצקי.'), [['ולריה', 'זלוצקי']]);
+  assert.deepEqual(ppl('נפגש עם ד"ר זלוצקי פעמיים.'), [['', 'זלוצקי']]);
+  assert.deepEqual(ppl('ד"ר רבינוביץ\' בדק אותו.'), [['', "רבינוביץ'"]]);
+  // Typical surname endings count after any first name.
+  assert.deepEqual(ppl('הילדה שירה רבינוביץ הגיעה.'), [['שירה', 'רבינוביץ']]);
+  // A title followed by an ordinary word is not a name.
+  assert.deepEqual(ppl('הופנה לד"ר והוא המליץ.'), []);
+  assert.deepEqual(ppl('ד"ר אמר שהכול בסדר.'), []);
+  const r = autoScrub('נמצא במעקב ד"ר ולריה זלוצקי. ד"ר זלוצקי ממליצה.', createCase({ seed: 'dr' }));
+  assert.ok(!/ולריה|זלוצקי/.test(r.text), r.text);
 });
 
 import { HELDOUT } from './heldout.js';

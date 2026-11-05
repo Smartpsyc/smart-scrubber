@@ -145,7 +145,7 @@ export const COMMUNITIES = ['general', 'arab'];
 // "בית ספר אלונים" becomes "בית ספר ביאליק", not just "ביאליק".
 export const SCHOOL_HEADS_HE = [
   'חטיבת הביניים', 'חטיבת ביניים', 'ישיבה תיכונית', 'בית הספר', 'בית ספר', 'גן הילדים',
-  'גן ילדים', 'אוניברסיטת', 'ביה"ס', 'בי"ס', 'תיכון', 'אולפנת', 'ישיבת', 'מכללת', 'גן',
+  'גן ילדים', 'אוניברסיטת', 'תלמוד התורה', 'תלמוד תורה', 'ביה"ס', 'בי"ס', 'ת"ת', "ת''ת", 'תיכון', 'אולפנת', 'ישיבת', 'מכללת', 'גן',
 ];
 export const SCHOOL_TAILS_EN = [
   ' Elementary School', ' Middle School', ' Primary School', ' High School', ' Kindergarten',
