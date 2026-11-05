@@ -98,10 +98,13 @@ export function scrub(text, kase) {
   const residual = [];
   const outDates = parseDates(out, { dateOrder: c.dateOrder });
   const inDate = (a, b) => outDates.some((d) => a >= d.start && b <= d.end);
+  // A real form inside a stand-in we just wrote is not a leak: "הספר" inside
+  // the surrogate "בית הספר קורצ'אק".
+  const inSurrogate = (a, b) => spans.some((sp) => a >= sp.outStart && b <= sp.outEnd);
   for (const m of c.mappings) {
     for (const f of [...m.real.he, ...m.real.en]) {
       for (const mt of out.matchAll(buildFormRegex(f))) {
-        if (!inDate(mt.index, mt.index + mt[0].length)) { residual.push({ kind: m.kind, mappingId: m.id, start: mt.index }); break; }
+        if (!inDate(mt.index, mt.index + mt[0].length) && !inSurrogate(mt.index, mt.index + mt[0].length)) { residual.push({ kind: m.kind, mappingId: m.id, start: mt.index }); break; }
       }
     }
   }

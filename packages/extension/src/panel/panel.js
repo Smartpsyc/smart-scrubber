@@ -293,7 +293,8 @@ function renderCompose() {
       residual.textContent = `${S.t.warnSurrogate} ${[...new Set(clash)].join(', ')}`;
     }
     if (p.residual.length) {
-      residual.className = 'notice danger';
+      // A warning, not a block: the clinician decides.
+      residual.className = 'notice warn';
       residual.hidden = false;
       residual.replaceChildren(S.t.residual, el('ul', {}, p.residual.map((r) =>
         el('li', {}, `${r.kind}: ${p.text.slice(r.start, r.end ?? r.start + 12)}`))));
@@ -326,9 +327,9 @@ function renderCompose() {
   renderSendButton();
 }
 
-// Committing needs only a clean anonymized text; putting it into Claude also needs the page.
+// Committing needs an anonymized text (leftovers only warn); putting it into Claude also needs the page.
 function canCommit() {
-  return !!(S.preview && !S.preview.error && !S.preview.residual.length && !S.busy);
+  return !!(S.preview && !S.preview.error && !S.busy);
 }
 
 function renderSendButton() {

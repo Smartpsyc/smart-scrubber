@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Smart Scrubber",
   "short_name": "Scrubber",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Swaps names and identifiers for stand-ins before your text reaches claude.ai, and restores them only when you ask. Runs locally.",
   "minimum_chrome_version": "116",
   "permissions": [

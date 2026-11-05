@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCase, suggest, autoScrub, restore } from '../src/index.js';
+import { createCase, suggest, autoScrub, restore, addEntities, scrub } from '../src/index.js';
 import { ALL_FAMILIES, buildCorpus, groundTruth } from './corpus.js';
 
 const PRE = '(?:ו?(?:ש|כש|מש|לכש)?[הבכלמ]?)';
@@ -173,4 +173,23 @@ test('a town the clinician already declared is not suggested again (spelling var
   }
   const fresh = suggest('נועה הגיעה מקריית אונו.', createCase());
   assert.equal(fresh.suggestions.filter((s) => s.kind === 'town').length, 1);
+});
+
+test('everyday words and test codes are not names or places', () => {
+  const all = (t) => suggest(t).suggestions.map((x) => x.kind + ':' + (x.entity.he?.[0] || x.entity.first?.he?.[0] || x.entity.first?.en?.[0] || x.entity.last?.he?.[0] || ''));
+  assert.deepEqual(all('מריבות עם האחות, רצון מתמשך להישאר בבית'), []);
+  assert.deepEqual(all(', ובמידת האפשר ADI-R ושאלון מורה'), []);
+  assert.deepEqual(all('Noa took the ADOS and ADI-R.'), ['person:נועה']);
+  assert.deepEqual(all('הם עברו לגור עם נועם'), []);
+  assert.deepEqual(all('גרים במושב נועם'), ['town:נועם']);
+  // Appositive names after a comma still count.
+  assert.deepEqual(all('האם, הדסה גרינוולד, דיווחה'), ['person:הדסה']);
+  assert.deepEqual(all('אמה, אלמז, לא יודעת'), ['person:אלמז']);
+});
+
+test('a real word inside a stand-in is not reported as a leftover', () => {
+  let k = createCase({ seed: 'x' });
+  k = addEntities(k, [{ kind: 'school', he: ['בית הספר ולכניסה'] }, { kind: 'town', he: ['הספר'] }]);
+  const r = scrub('הגיע לבית הספר ולכניסה לשיעורים.', k);
+  assert.deepEqual(r.residual, []);
 });

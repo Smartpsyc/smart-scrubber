@@ -281,7 +281,14 @@ export function suggest(text, kase = null) {
         }
         const title = PERSON_TITLES_HE.test(cue);
         const entry = I.firstHe.get(t.n);
-        if (entry || REGISTRY_NAMES.has(t.n)) {
+        // "עם האחות, רצון מתמשך…": after a comma the word starts a new phrase;
+        // only a name on the curated list counts there, not a registry-only one.
+        // An appositive name is set off: "האם, הדסה גרינוולד,", "אמה, אלמז, לא…".
+        const nxC = toks[i + 1];
+        const setOff = !nxC || /[,.;:!?)\n–]/.test(nxC.gap) || surnameAt(i + 1) || (nxC.adjacent && VERB_MARKERS.has(nxC.n))
+          || (nxC.adjacent && plainWord(nxC) && toks[i + 2] && /,/.test(toks[i + 2].gap)); // "הדסה גרינוולד,"
+        const commaGap = /,/.test(t.gap) && !setOff;
+        if (entry || (REGISTRY_NAMES.has(t.n) && !commaGap)) {
           const withLast = surnameAt(i + 1) || (title && titleSurnameAt(i + 1));
           addPerson({ entry, form: t.raw, script: 'he', g, i, reason: 'cue:' + cue, conf: entry ? 'high' : 'medium', lastTok: withLast ? i + 1 : null });
           continue;
@@ -320,6 +327,10 @@ export function suggest(text, kase = null) {
       const n = stripPoss(t.n);
       if (!isCap(t.raw)) continue;
       const allCaps = isAllCaps(t.raw);
+      // Test codes and acronyms: "ADI-R", "WISC-V", "ADOS". An all-caps word
+      // is a name only with a cue or an all-caps surname right after it.
+      const nxL = toks[i + 1];
+      if (allCaps && !(prev && prev.la && prev.n in PERSON_CUES_EN) && !(nxL && nxL.adjacent && nxL.la && isAllCaps(nxL.raw) && !COMMON_CAPS.has(nxL.n))) continue;
       const cueWord = prev && prev.la ? prev.n : null;
       const cue = cueWord && cueWord in PERSON_CUES_EN && /^[.,]?\s+$/.test(t.gap) ? cueWord : null;
       const entry = I.firstEn.get(n);
@@ -350,6 +361,7 @@ export function suggest(text, kase = null) {
       if (span.some((x, k) => (k > 0 && !/^[  \-־–]+$/.test(x.gap)) || used.has(i + k) || x.he !== t.he)) continue;
       const rest = span.slice(1).map((x) => x.n);
       for (const v of prefixVariants(t)) {
+        if (/ש$/.test(v.pre)) continue; // "שאלון מורה" is a questionnaire, not ש+אלון מורה
         const rec = I.loc.get([v.base, ...rest].join(' '));
         if (rec) { hit = { rec, n, pre: v.pre, base: v.base }; break; }
       }
@@ -370,6 +382,14 @@ export function suggest(text, kase = null) {
     const ambiguous = single && !TOWN_DISTINCTIVE_HE.has(normalizeForm(hit.rec.he).replace(/'/g, "'"))
       && !TOWN_DISTINCTIVE_HE.has(hit.rec.he);
     if (ambiguous && !cue) continue;
+    // A town that is also a first name ("נועם", "עדי"): "לגור עם נועם" is a
+    // person. Needs a place preposition on the word or a settlement word before it.
+    if (ambiguous && t.he && (I.firstHe.has(base) || REGISTRY_NAMES.has(base))) {
+      const pv = toks[i - 1];
+      const placePre = /^ו?(ב|מ|ל|מה|לה)$/.test(hit.pre);
+      const settlement = pv && /^[  ]+$/.test(t.gap) && prefixVariants(pv).some((v) => SETTLEMENT_HE.has(v.base));
+      if (!placePre && !settlement) continue;
+    }
     if (!t.he && !isCap(t.raw)) continue;
     const writtenForm = text.slice(t.start + (hit.pre ? hit.pre.length : 0), toks[i + hit.n - 1].end).replace(/^[-־]/, '');
     if (declared.has(normalizeForm(writtenForm)) || [...hit.rec.all.he, ...hit.rec.all.en].some((f) => declared.has(normalizeForm(f)))) {
@@ -576,6 +596,8 @@ export function autoScrub(text, kase, { accept = () => true } = {}) {
   for (const s of chosen.filter((x) => x.kind === 'spelling')) k2 = addSpelling(k2, s.entityId, s.part, 'en', s.entity.en);
   return { ...scrub(text, k2), suggestions };
 }
+
+const SETTLEMENT_HE = new Set(['מושב', 'קיבוץ', 'העיר', 'עיר', 'היישוב', 'הישוב', 'יישוב', 'ישוב', 'כפר', 'הכפר', 'המושב', 'הקיבוץ', 'מועצה', 'המועצה']);
 
 const CUE_ADJ_HE = new Set(`הגדולה,הקטנה,הגדול,הקטן,הבכור,הבכורה,הצעיר,הצעירה,הבוגר,הבוגרת,התאום,התאומה,הקודם,
 הקודמת,החדש,החדשה,הנוכחי,הנוכחית,הראשון,הראשונה,השני,השנייה,האמצעי,האמצעית,הביולוגי,הביולוגית,החורג,החורגת`.split(/[,\s]+/).filter(Boolean));

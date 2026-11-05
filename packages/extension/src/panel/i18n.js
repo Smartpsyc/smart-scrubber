@@ -75,7 +75,7 @@ export const STRINGS = {
     noSuggestions: 'Nothing found automatically.',
     needsGender: 'gender?',
     warnSurrogate: 'Your text already contains a stand-in name, which would be turned back into the real name on restore:',
-    residual: 'Some identifiers could not be replaced, so this is blocked:',
+    residual: 'These may still be identifying. Check them in “What Claude will get” before you send:',
     tagAs: 'Add as',
     tagFemale: '♀ Person', tagMale: '♂ Person', tagPlace: 'Place', tagSchool: 'School', tagOther: 'Other',
     // legend
@@ -178,7 +178,7 @@ export const STRINGS = {
     noSuggestions: 'לא נמצא דבר אוטומטית.',
     needsGender: 'מגדר?',
     warnSurrogate: 'הטקסט כבר מכיל שם חלופי, שיהפוך בשחזור לשם האמיתי:',
-    residual: 'חלק מהמזהים לא הוחלפו, ולכן הפעולה חסומה:',
+    residual: 'ייתכן שאלה עדיין מזהים. בדקו אותם ב„מה Claude יקבל” לפני השליחה:',
     tagAs: 'להוסיף כ',
     tagFemale: '♀ אדם', tagMale: '♂ אדם', tagPlace: 'מקום', tagSchool: 'בית ספר', tagOther: 'אחר',
     legendTitle: 'מפתח (נשאר במחשב הזה)',

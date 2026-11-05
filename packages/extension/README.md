@@ -27,7 +27,7 @@ Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** 
 Pin the extension, open claude.ai, then click the toolbar icon to open the panel.
 
 **After updating the code:** Chrome keeps running the old copy until you click the ↻ reload icon on the extension's card
-in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.0`).
+in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.1`).
 
 ## How it works
 
@@ -51,7 +51,8 @@ Guarantees you can check in the code:
 
 **Fails closed.** If Claude's message box can't be found, **Put into Claude** is disabled ("Claude's page changed.
 The scrubber is paused"); **Copy anonymized** still works. If the inserted text doesn't land exactly, you're told to clear the box
-and retry. If any real identifier would remain in the anonymized text, both buttons stay blocked.
+and retry. If a declared identifier or an ID/phone/email pattern would remain in the anonymized text, the panel lists it
+as a warning above the buttons; you decide whether to fix it or send anyway.
 
 New chats: the case is a draft until you send in Claude. When the chat gets its id (`/chat/<uuid>`) the case moves to it,
 and reopens whenever you come back to that conversation.
