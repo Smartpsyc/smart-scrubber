@@ -1,10 +1,10 @@
-// Panel screenshots for docs / the store listing: node tools/screenshots.mjs <out-dir> (after npm run build:test).
+// Panel screenshots for docs / the store listing: node tools/screenshots.mjs <out-dir> (after npm run build:test). SCHEME=dark for dark mode.
 import { mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
 import { chromium } from 'playwright'; import { startMock } from '../test/mock/server.mjs';
 const out = process.argv[2];
 const mock = await startMock();
 const dist = new URL('../dist-test', import.meta.url).pathname;
-const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'shot-')), { channel: 'chromium', headless: true, locale: 'en-US', viewport: { width: 400, height: 1500 }, args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`] });
+const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'shot-')), { channel: 'chromium', headless: true, locale: 'en-US', viewport: { width: 400, height: 1500 }, colorScheme: process.env.SCHEME === 'dark' ? 'dark' : 'light', args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`] });
 let [sw] = ctx.serviceWorkers(); if (!sw) sw = await ctx.waitForEvent('serviceworker');
 const page = await ctx.newPage(); await page.goto(mock.origin + '/new');
 const p = await ctx.newPage(); await p.goto(`chrome-extension://${new URL(sw.url()).host}/panel/panel.html`);
