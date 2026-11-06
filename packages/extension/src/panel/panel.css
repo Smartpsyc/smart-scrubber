@@ -188,3 +188,9 @@ button.big .big-main { font-size: 15px; }
 button.big .big-sub { font-size: 12px; font-weight: 400; opacity: .9; }
 .textbox.tall { max-block-size: 420px; }
 #paste { margin-block: 6px; }
+
+/* The one fold under the article: quiet, the details are inside it. */
+details.more-box > summary { color: var(--accent-text); font-weight: 600; }
+details.more-box[open] > summary { color: var(--text); }
+details.more-box > details.sub { margin-inline-start: 4px; }
+#article-box .field-label { margin-block-start: 4px; }

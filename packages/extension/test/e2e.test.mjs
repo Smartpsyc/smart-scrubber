@@ -49,7 +49,7 @@ async function openMock(path = '/new') {
   return p;
 }
 
-async function openPanel() {
+async function openPanel({ mode = 'manual' } = {}) {
   const p = await ctx.newPage();
   pages.push(p);
   p.on('request', (r) => { if (!/^(chrome-extension|data|blob):/.test(r.url())) offPanelRequests.push(r.url()); });
@@ -57,6 +57,7 @@ async function openPanel() {
   await p.goto(`chrome-extension://${extId}/panel/panel.html`);
   const ok = p.locator('#disclaimer-ok');
   if (await ok.isVisible()) await ok.click();
+  if (mode) { await p.locator('#mode-manual').waitFor({ state: 'attached' }); await p.waitForFunction(() => document.querySelector('.seg button[aria-checked="true"]')); await setMode(p, mode); }
   return p;
 }
 
@@ -66,19 +67,24 @@ async function connected(panel) {
 
 // Step 1 folds are exclusive (one open at a time): open the one a test needs.
 async function fold(panel, id) {
-  await panel.evaluate((x) => { document.getElementById(x).open = true; }, id);
+  await panel.evaluate((x) => {
+    for (let d = document.getElementById(x); d; d = d.parentElement) if (d.tagName === 'DETAILS') d.open = true;
+  }, id);
 }
 
 async function fillCompose(panel, text) {
-  await fold(panel, 'article-box');
   await panel.fill('#compose', text);
 }
 
 async function openAdd(panel) {
-  await panel.evaluate(() => {
-    for (const id of ['people-box', 'add-box']) document.getElementById(id).open = true;
-    for (const d of document.querySelectorAll('details.more')) d.open = true;
-  });
+  await fold(panel, 'add-box');
+  await panel.evaluate(() => { for (const d of document.querySelectorAll('details.more')) d.open = true; });
+}
+
+// New cases start in Auto; most tests exercise the declared-names path.
+async function setMode(panel, mode) {
+  await fold(panel, 'people-box');
+  await panel.click(`#mode-${mode}`);
 }
 
 async function restorePasted(panel, text) {
@@ -378,21 +384,36 @@ test('the panel never touched the network (pdf.js and mammoth included)', () => 
   assert.deepEqual(cspRefusals, []);
 });
 
-test('step 1 folds: one open at a time, each header says where things stand', async () => {
-  await openMock();
-  const panel = await openPanel();
+test('quick path: a new case starts in Auto, paste and click; details wait under one fold', async () => {
+  const page = await openMock();
+  const panel = await openPanel({ mode: null });
   await connected(panel);
+  assert.equal(await panel.locator('#mode-auto').getAttribute('aria-checked'), 'true', 'Auto by default');
+  assert.equal(await panel.evaluate(() => document.getElementById('more-box').open), false, 'details folded');
+  await compose(panel, 'נועה כהן הגיעה עם אמה רחל מחיפה.');
+  assert.equal(await panel.locator('#article-count').textContent(), '7 words');
+  await panel.waitForFunction(() => /found · \d+ to replace/.test(document.getElementById('more-count').textContent));
+  await insertAndSend(panel, page);
+  const sent = await page.evaluate(() => window.__sent[0]);
+  for (const r of ['נועה', 'כהן', 'רחל', 'חיפה']) assert.ok(!sent.includes(r), `sent ${r}: ${sent}`);
+
+  // Inside "Check and adjust" one part is open at a time.
   const open = () => panel.evaluate(() => [...document.querySelectorAll('details[name="s1"]')].filter((d) => d.open).map((d) => d.id));
-  assert.deepEqual(await open(), ['article-box'], 'the article is open first');
-  assert.match(await panel.locator('#people-count').textContent(), /none yet · Manual/);
-  await addPerson(panel, { first: 'נועה', last: 'כהן' });
-  assert.deepEqual(await open(), ['people-box'], 'opening one closes the others');
-  assert.match(await panel.locator('#people-count').textContent(), /\(1\) · Manual/);
-  await compose(panel, 'נועה כהן הגיעה היום.');
-  assert.deepEqual(await open(), ['article-box']);
-  assert.equal(await panel.locator('#article-count').textContent(), '4 words');
-  assert.equal(await panel.locator('#preview-count').textContent(), '2 to replace');
+  await fold(panel, 'people-box');
+  assert.match(await panel.locator('#people-count').textContent(), /· Auto/);
   await panel.click('#preview-box > summary');
   assert.deepEqual(await open(), ['preview-box']);
-  assert.equal(await panel.locator('#insert').isDisabled(), false, 'the buttons stay outside the folds');
+});
+
+test('found schools: whole name on the chip, unticked one at a time', async () => {
+  await openMock();
+  const panel = await openPanel({ mode: null });
+  await connected(panel);
+  await compose(panel, 'לומדת בבית הספר אלונים, אחיה בבית הספר ויצמן.');
+  await fold(panel, 'suggestions-wrap');
+  const alonim = panel.locator('#suggestions li[data-suggestion]', { hasText: 'בית הספר אלונים' });
+  await alonim.waitFor();
+  // Unticking one school leaves the other ticked.
+  await alonim.locator('input[type=checkbox]').uncheck();
+  assert.equal(await panel.locator('#suggestions li[data-suggestion]', { hasText: 'בית הספר ויצמן' }).locator('input').isChecked(), true);
 });

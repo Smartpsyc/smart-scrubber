@@ -28,69 +28,8 @@
   <details class="step" id="step1" open>
     <summary><span class="step-n">1</span><span data-i18n="step1Title"></span></summary>
     <div class="step-body">
-      <!-- One fold open at a time (name="s1"); each header carries a short status. -->
-      <details class="sub" id="people-box" name="s1">
-        <summary><span data-i18n="peopleTitle"></span> <span class="count" id="people-count"></span></summary>
-        <div class="row between">
-          <div class="seg" role="radiogroup">
-            <button type="button" role="radio" id="mode-manual" data-mode="manual" data-i18n="modeManual"></button>
-            <button type="button" role="radio" id="mode-auto" data-mode="auto" data-i18n="modeAuto"></button>
-          </div>
-          <span id="mode-hint" class="hint"></span>
-        </div>
-        <ul id="entities" class="chips"></ul>
-        <details class="sub inner" id="add-box">
-          <summary data-i18n="addTitle"></summary>
-            <form id="add-form" class="add-form" autocomplete="off">
-              <select id="add-kind" aria-label="kind">
-                <option value="person" data-i18n="kindPerson"></option>
-                <option value="town" data-i18n="kindTown"></option>
-                <option value="school" data-i18n="kindSchool"></option>
-                <option value="job" data-i18n="kindJob"></option>
-                <option value="other" data-i18n="kindOther"></option>
-              </select>
-              <div class="fields" data-for="person">
-                <label><span data-i18n="firstName"></span><input name="first" dir="auto"></label>
-                <label><span data-i18n="lastName"></span><input name="last" dir="auto"></label>
-                <label><span data-i18n="gender"></span>
-                  <select name="gender">
-                    <option value="f" data-i18n="female"></option>
-                    <option value="m" data-i18n="male"></option>
-                    <option value="x" data-i18n="unknown"></option>
-                  </select>
-                </label>
-                <label><span data-i18n="role"></span><select name="role" id="role-select"></select></label>
-                <details class="more wide">
-                  <summary data-i18n="moreFields"></summary>
-                  <div class="fields">
-                    <label><span data-i18n="firstOther"></span><input name="firstOther" dir="auto"></label>
-                    <label><span data-i18n="lastOther"></span><input name="lastOther" dir="auto"></label>
-                    <label class="wide"><span data-i18n="nicknames"></span><input name="nicknames" dir="auto"></label>
-                  </div>
-                </details>
-              </div>
-              <div class="fields" data-for="town school">
-                <label><span data-i18n="placeName"></span><input name="place" dir="auto"></label>
-                <label><span data-i18n="placeOther"></span><input name="placeOther" dir="auto"></label>
-              </div>
-              <div class="fields" data-for="job">
-                <label><span data-i18n="jobTitle"></span><input name="job" dir="auto"></label>
-                <label><span data-i18n="replaceWith"></span><input name="jobReplace" dir="auto"></label>
-              </div>
-              <div class="fields" data-for="other">
-                <label><span data-i18n="otherText"></span><input name="other" dir="auto"></label>
-                <label><span data-i18n="replaceWith"></span><input name="otherReplace" dir="auto"></label>
-              </div>
-              <div class="row">
-                <button type="submit" id="add-btn" data-i18n="add"></button>
-                <span id="add-error" class="error" role="alert"></span>
-              </div>
-            </form>
-        </details>
-      </details>
-
-      <details class="sub" id="article-box" name="s1" open>
-        <summary><span data-i18n="composeTitle"></span> <span class="count" id="article-count"></span></summary>
+      <div id="article-box">
+        <p class="field-label"><span data-i18n="composeTitle"></span> <span class="count" id="article-count"></span></p>
         <div id="drop" class="drop">
           <span data-i18n="fileDrop"></span>
           <button type="button" id="file-btn" class="link" data-i18n="fileChoose"></button>
@@ -98,22 +37,87 @@
           <span id="file-msg" class="msg" role="status"></span>
         </div>
         <textarea id="compose" dir="auto" rows="6" data-i18n-ph="composePlaceholder" data-i18n-aria="composeTitle"></textarea>
-      </details>
+      </div>
 
-      <details class="sub" id="suggestions-wrap" name="s1" hidden>
-        <summary><span data-i18n="suggestionsTitle"></span> <span class="count" id="found-count"></span></summary>
-        <p class="hint" data-i18n="suggestionsHint"></p>
-        <ul id="suggestions" class="chips"></ul>
-      </details>
+      <!-- Quick path: paste, click. Everything else lives in this fold; inside it one part is open at a time. -->
+      <details class="sub more-box" id="more-box">
+        <summary><span data-i18n="moreTitle"></span> <span class="count" id="more-count"></span></summary>
+        <details class="sub" id="suggestions-wrap" name="s1" hidden>
+          <summary><span data-i18n="suggestionsTitle"></span> <span class="count" id="found-count"></span></summary>
+          <p class="hint" data-i18n="suggestionsHint"></p>
+          <ul id="suggestions" class="chips"></ul>
+        </details>
 
-      <details class="sub" id="preview-box" name="s1">
-        <summary><span data-i18n="previewTitle"></span> <span class="count" id="preview-count"></span></summary>
-        <p class="hint" data-i18n="previewHint"></p>
-        <div id="preview" class="textbox" dir="auto" data-testid="preview"></div>
-      </details>
-      <details class="sub" id="outgoing-box" name="s1">
-        <summary data-i18n="outgoingTitle"></summary>
-        <div id="outgoing" class="textbox outgoing" dir="auto" data-testid="outgoing"></div>
+        <details class="sub" id="people-box" name="s1">
+          <summary><span data-i18n="peopleTitle"></span> <span class="count" id="people-count"></span></summary>
+          <div class="row between">
+            <div class="seg" role="radiogroup">
+              <button type="button" role="radio" id="mode-manual" data-mode="manual" data-i18n="modeManual"></button>
+              <button type="button" role="radio" id="mode-auto" data-mode="auto" data-i18n="modeAuto"></button>
+            </div>
+            <span id="mode-hint" class="hint"></span>
+          </div>
+          <ul id="entities" class="chips"></ul>
+          <details class="sub inner" id="add-box">
+            <summary data-i18n="addTitle"></summary>
+              <form id="add-form" class="add-form" autocomplete="off">
+                <select id="add-kind" aria-label="kind">
+                  <option value="person" data-i18n="kindPerson"></option>
+                  <option value="town" data-i18n="kindTown"></option>
+                  <option value="school" data-i18n="kindSchool"></option>
+                  <option value="job" data-i18n="kindJob"></option>
+                  <option value="other" data-i18n="kindOther"></option>
+                </select>
+                <div class="fields" data-for="person">
+                  <label><span data-i18n="firstName"></span><input name="first" dir="auto"></label>
+                  <label><span data-i18n="lastName"></span><input name="last" dir="auto"></label>
+                  <label><span data-i18n="gender"></span>
+                    <select name="gender">
+                      <option value="f" data-i18n="female"></option>
+                      <option value="m" data-i18n="male"></option>
+                      <option value="x" data-i18n="unknown"></option>
+                    </select>
+                  </label>
+                  <label><span data-i18n="role"></span><select name="role" id="role-select"></select></label>
+                  <details class="more wide">
+                    <summary data-i18n="moreFields"></summary>
+                    <div class="fields">
+                      <label><span data-i18n="firstOther"></span><input name="firstOther" dir="auto"></label>
+                      <label><span data-i18n="lastOther"></span><input name="lastOther" dir="auto"></label>
+                      <label class="wide"><span data-i18n="nicknames"></span><input name="nicknames" dir="auto"></label>
+                    </div>
+                  </details>
+                </div>
+                <div class="fields" data-for="town school">
+                  <label><span data-i18n="placeName"></span><input name="place" dir="auto"></label>
+                  <label><span data-i18n="placeOther"></span><input name="placeOther" dir="auto"></label>
+                </div>
+                <div class="fields" data-for="job">
+                  <label><span data-i18n="jobTitle"></span><input name="job" dir="auto"></label>
+                  <label><span data-i18n="replaceWith"></span><input name="jobReplace" dir="auto"></label>
+                </div>
+                <div class="fields" data-for="other">
+                  <label><span data-i18n="otherText"></span><input name="other" dir="auto"></label>
+                  <label><span data-i18n="replaceWith"></span><input name="otherReplace" dir="auto"></label>
+                </div>
+                <div class="row">
+                  <button type="submit" id="add-btn" data-i18n="add"></button>
+                  <span id="add-error" class="error" role="alert"></span>
+                </div>
+              </form>
+          </details>
+        </details>
+
+
+        <details class="sub" id="preview-box" name="s1">
+          <summary><span data-i18n="previewTitle"></span> <span class="count" id="preview-count"></span></summary>
+          <p class="hint" data-i18n="previewHint"></p>
+          <div id="preview" class="textbox" dir="auto" data-testid="preview"></div>
+        </details>
+        <details class="sub" id="outgoing-box" name="s1">
+          <summary data-i18n="outgoingTitle"></summary>
+          <div id="outgoing" class="textbox outgoing" dir="auto" data-testid="outgoing"></div>
+        </details>
       </details>
 
       <div id="residual" class="notice danger" hidden></div>

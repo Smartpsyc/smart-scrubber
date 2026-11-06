@@ -133,7 +133,7 @@ async function doRefresh() {
 function freshRecord() {
   return {
     kase: createCase({ community: S.settings.community || 'general' }),
-    mode: 'manual',
+    mode: 'auto', // quick by default: paste and click; Manual is under Check and adjust
     compose: '',
     createdAt: Date.now(),
   };
@@ -177,10 +177,13 @@ const persistSoon = debounce(() => persistNow().catch(() => {}), 600);
 
 // ---------- scrubbing ----------
 
+// A school's he/en is a string; a town's is a list.
+const oneOf = (v) => (Array.isArray(v) ? v[0] : v) || '';
+
 function sugKey(s) {
   const e = s.entity || {};
   const first = (x) => (x && (x.he?.[0] || x.en?.[0])) || '';
-  return [s.kind, s.entityId || '', first(e.first), first(e.last), e.he?.[0] || '', e.en?.[0] || ''].join('|');
+  return [s.kind, s.entityId || '', first(e.first), first(e.last), oneOf(e.he), oneOf(e.en)].join('|');
 }
 
 function recompute() {
@@ -312,8 +315,12 @@ function renderCompose() {
   wrap.hidden = !(S.rec && S.rec.mode === 'auto' && text.trim());
   const nFound = S.suggestions.filter((s) => s.kind !== 'spelling' && !S.unticked.has(sugKey(s))).length;
   $('found-count').textContent = wrap.hidden ? '' : `(${nFound})`;
-  // A hidden fold can't stay the open one: fall back to the article.
-  if (wrap.hidden && wrap.open) { wrap.open = false; $('article-box').open = true; }
+  // A hidden fold can't stay open.
+  if (wrap.hidden && wrap.open) wrap.open = false;
+  const more = [];
+  if (!wrap.hidden) more.push(S.t.foundN.replace('{n}', nFound));
+  if (nRepl) more.push(S.t.replaceN.replace('{n}', nRepl));
+  $('more-count').textContent = more.join(' · ');
   if (!wrap.hidden) {
     const chips = S.suggestions.filter((s) => s.kind !== 'spelling').map((s) => {
       const k = sugKey(s);
@@ -321,7 +328,7 @@ function renderCompose() {
       const e = s.entity;
       const label = s.kind === 'person'
         ? [e.first?.he?.[0] || e.first?.en?.[0], e.last?.he?.[0] || e.last?.en?.[0]].filter(Boolean).join(' ')
-        : s.kind === 'nickname' ? (e.he || e.en) : (e.he?.[0] || e.en?.[0] || e.he || e.en);
+        : s.kind === 'nickname' ? (e.he || e.en) : oneOf(e.he) || oneOf(e.en);
       const g = S.genders.get(k) || e.gender;
       const genderBtns = s.kind === 'person' && (s.needsGender || S.genders.has(k)) ? [
         el('button', { type: 'button', class: 'g', 'aria-pressed': String(g === 'f'), onclick: () => setSugGender(k, 'f') }, '♀'),
@@ -504,7 +511,6 @@ function advance() {
 
 async function loadFile(file) {
   if (!file || !S.rec) return;
-  $('article-box').open = true; // the result lands in the article
   setMsg('file-msg', S.t.fileReading);
   let r;
   try {

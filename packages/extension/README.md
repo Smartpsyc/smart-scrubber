@@ -2,8 +2,10 @@
 
 A side panel for claude.ai, built around one workflow:
 
-1. **Anonymize the article.** Paste it into the panel or drop in a Word, PDF or text file, declare the people and places (or let Auto mode suggest them), and
-   check the highlighted preview. Then **Put into Claude**: the anonymized text goes into Claude's message box, after
+1. **Anonymize the article.** Paste it into the panel or drop in a Word, PDF or text file. New cases start in **Auto**:
+   names and places are found for you, so in a rush it is paste and click. **Check and adjust** (folded under the article)
+   holds the rest: what was found (untick mistakes), Manual mode with your own list of people and places, the
+   highlighted preview, and the exact text Claude will get. Then **Put into Claude**: the anonymized text goes into Claude's message box, after
    anything you typed there. It never sends: you send it yourself. (A long article becomes a "pasted text" attachment,
    as claude.ai does with any long paste.) Or use **Copy anonymized**.
 2. **Work in Claude.** Everything there is anonymous, so work as usual. The panel shows the key (real name → stand-in)
@@ -27,7 +29,7 @@ Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** 
 Pin the extension, open claude.ai, then click the toolbar icon to open the panel.
 
 **After updating the code:** Chrome keeps running the old copy until you click the ↻ reload icon on the extension's card
-in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.3`).
+in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.4`).
 
 ## How it works
 
