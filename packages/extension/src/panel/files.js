@@ -1,20 +1,25 @@
 // Read an article from a local file, entirely in this panel. Nothing is uploaded:
-// mammoth (Word) and pdf.js (PDF) are bundled under vendor/, and the panel's CSP
-// blocks every network request (connect-src 'none').
+// mammoth (Word), pdf.js (PDF) and Tesseract (scans, photos) are bundled under
+// vendor/, and the panel's CSP blocks every network request (connect-src 'none').
 //
-// extractFile(file) → { text, pages? , warning? } or throws Error(code) with
-// code in: too-big | unsupported | scanned | unreadable.
+// extractFile(file, onProgress?) → { text, pages?, ocr? } or throws Error(code) with
+// code in: too-big | unsupported | scanned | unreadable. `ocr` counts the pages
+// read from an image; onProgress({ page, pages }) fires before each of them.
+
+import { ocrCanvas, imageToCanvas } from './ocr.js';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const HEB = /[֐-׿]/;
+const IMAGE = /\.(png|jpe?g|webp|bmp|gif)$/;
 
-export async function extractFile(file) {
+export async function extractFile(file, onProgress = () => {}) {
   if (file.size > MAX_BYTES) throw new Error('too-big');
   const name = file.name.toLowerCase();
   try {
     if (name.endsWith('.txt') || name.endsWith('.md') || file.type === 'text/plain') return { text: tidy(await file.text()) };
     if (name.endsWith('.docx')) return await fromDocx(file);
-    if (name.endsWith('.pdf') || file.type === 'application/pdf') return await fromPdf(file);
+    if (name.endsWith('.pdf') || file.type === 'application/pdf') return await fromPdf(file, onProgress);
+    if (IMAGE.test(name) || /^image\/(png|jpeg|webp|bmp|gif)$/.test(file.type)) return await fromImage(file, onProgress);
   } catch (e) {
     if (['scanned'].includes(e.message)) throw e;
     console.warn('[scrubber] could not read file', e); // local console only
@@ -101,32 +106,73 @@ function pdfjs() {
   return pdfjsPromise;
 }
 
-async function fromPdf(file) {
+const OCR_DPI = 300;
+const MAX_SIDE = 4200; // px; keeps a poster-sized page from eating memory
+
+async function fromPdf(file, onProgress) {
   const lib = await pdfjs();
   const task = lib.getDocument({
     data: new Uint8Array(await file.arrayBuffer()),
     isEvalSupported: false,
-    // Nothing may be fetched: no CMaps, no standard-font data, no wasm decoders.
+    // Nothing may be fetched: no CMaps, no standard-font data. Scan images
+    // (CCITT, JBIG2, JPEG 2000) use pdf.js's plain-JS decoders, imported from
+    // vendor/ instead of fetching wasm.
     cMapUrl: null,
     standardFontDataUrl: null,
-    wasmUrl: null,
+    useWasm: false,
+    wasmUrl: new URL('../vendor/pdfjs/wasm/', import.meta.url).href,
     useSystemFonts: false,
     disableFontFace: true,
     stopAtErrors: false,
   });
   const doc = await task.promise;
   const pages = [];
+  const scanned = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
-    pages.push(pageText(content.items));
+    const text = pageText(content.items);
+    // A scanned page has no text layer (or a stray line, like a scanner's stamp).
+    if (text.replace(/\s/g, '').length < 40) scanned.push(p);
+    pages.push({ text, ocr: false });
     page.cleanup();
   }
+  // Text pages: fix visually-stored Hebrew, judged over all of them together.
+  const visual = isVisualHebrew(pages.filter((_, i) => !scanned.includes(i + 1)).map((pg) => pg.text).join('\n'));
+  if (visual) pages.forEach((pg, i) => { if (!scanned.includes(i + 1)) pg.text = reverseVisualLines(pg.text); });
+  let n = 0;
+  for (const p of scanned) {
+    onProgress({ page: ++n, pages: scanned.length });
+    const page = await doc.getPage(p);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.min(OCR_DPI / 72, MAX_SIDE / Math.max(base.width, base.height));
+    const viewport = page.getViewport({ scale });
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(viewport.width);
+    cv.height = Math.ceil(viewport.height);
+    const g = cv.getContext('2d', { willReadFrequently: true });
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvas: cv, canvasContext: g, viewport, background: '#fff' }).promise;
+    page.cleanup();
+    const read = await ocrCanvas(cv);
+    // Keep whichever says more: the OCR, or the page's own bits of text.
+    if (read.replace(/\s/g, '').length > pages[p - 1].text.replace(/\s/g, '').length) pages[p - 1] = { text: read, ocr: true };
+    cv.width = cv.height = 0;
+  }
   await task.destroy();
-  const text = tidy(pages.join('\n\n'));
-  // A scan has (almost) no text layer. OCR comes in a later version.
-  if (text.replace(/\s/g, '').length < 20 * doc.numPages) throw new Error('scanned');
-  return { text: fixVisualHebrew(text), pages: doc.numPages };
+  const text = tidy(pages.map((pg) => pg.text).join('\n\n'));
+  if (text.replace(/\s/g, '').length < 10) throw new Error('scanned');
+  return { text, pages: doc.numPages, ocr: pages.filter((pg) => pg.ocr).length };
+}
+
+// ---------- images (photos, scanner output) ----------
+
+async function fromImage(file, onProgress) {
+  onProgress({ page: 1, pages: 1 });
+  const text = tidy(await ocrCanvas(await imageToCanvas(file)));
+  if (text.replace(/\s/g, '').length < 10) throw new Error('scanned');
+  return { text, pages: 1, ocr: 1 };
 }
 
 // Group text items into lines by baseline, and lines into paragraphs by gap.
@@ -175,12 +221,19 @@ function lineText(parts) {
 // dominates, reverse each Hebrew line, then put numbers/Latin runs back in order.
 const FINALS = /[ךםןףץ]/;
 export function fixVisualHebrew(text) {
+  return isVisualHebrew(text) ? reverseVisualLines(text) : text;
+}
+
+function isVisualHebrew(text) {
   let atStart = 0, atEnd = 0;
   for (const w of text.match(/[א-ת]{2,}/g) || []) {
     if (FINALS.test(w[0])) atStart++;
     if (FINALS.test(w[w.length - 1])) atEnd++;
   }
-  if (atStart <= atEnd * 2 || atStart < 3) return text;
+  return !(atStart <= atEnd * 2 || atStart < 3);
+}
+
+function reverseVisualLines(text) {
   return text.split('\n').map((line) => {
     if (!HEB.test(line)) return line;
     const rev = [...line].reverse().join('');

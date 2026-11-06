@@ -29,7 +29,7 @@ Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** 
 Pin the extension, open claude.ai, then click the toolbar icon to open the panel.
 
 **After updating the code:** Chrome keeps running the old copy until you click the ↻ reload icon on the extension's card
-in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.4`).
+in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.3.0`).
 
 ## How it works
 
@@ -37,16 +37,19 @@ in `chrome://extensions` (then reload the claude.ai tab). The panel header shows
 |-------|------|-------|
 | Side panel | `src/panel/` | Case fields (manual), suggestion chips (auto), preview, outgoing text, key, restore. English + Hebrew (RTL). |
 | Engine | `vendor/scrub-core/` (copied in at build) | Same code as `packages/scrub-core`, loaded as native ES modules: no bundler. |
-| File reading | `src/panel/files.js` + `vendor/mammoth`, `vendor/pdfjs` (copied in at build) | `.docx` via mammoth → Markdown (headings, lists, tables); `.pdf` via pdf.js text layer, with right-to-left line re-ordering for Hebrew; `.txt`/`.md`. All in the panel's memory; scans without a text layer are refused (OCR not yet). |
+| File reading | `src/panel/files.js` + `vendor/mammoth`, `vendor/pdfjs` (copied in at build) | `.docx` via mammoth → Markdown (headings, lists, tables); `.pdf` via pdf.js text layer, with right-to-left line re-ordering for Hebrew; `.txt`/`.md`. All in the panel's memory. |
+| OCR (scans, photos) | `src/panel/ocr.js`, `ocr-prep.js`, `ocr-worker.js` + `vendor/tesseract` | PDF pages with no text layer, and `.jpg`/`.png`/`.webp` photos, are read with Tesseract 5 (tesseract.js 7, Hebrew + English `tessdata_best` integer models, LSTM engine). Each page is rendered at 300 DPI, its lighting evened out and its tilt straightened, then read in a worker. Fax-style CCITT/JBIG2 and JPEG 2000 scans decode with pdf.js's bundled plain-JS decoders. The message after a scan asks you to check the names, because a misread name can't be matched. |
 | Case store | `src/panel/store.js` | AES-GCM-256. The key is a **non-extractable** `CryptoKey` in IndexedDB; ciphertext in `chrome.storage.local`, keyed by Claude conversation id. Cases expire after 30 days (configurable). |
 | claude.ai adapter | `src/content/claude-adapter.js` | **All claude.ai selectors live here.** Appends anonymized text to Claude's message box (synthetic paste), never clicks Send, reads the last finished reply on request (converted back to Markdown). |
 | Service worker | `src/background.js` | Only opens the panel from the toolbar. Never sees case text. |
 
 Guarantees you can check in the code:
-- The panel's CSP is `default-src 'self'; connect-src 'none'` (plus `worker-src 'self'` for the bundled pdf.js worker):
-  extension pages can load nothing from outside the extension and can't make network requests. pdf.js runs with eval,
-  CMap, standard-font and wasm fetching all off.
-- The end-to-end tests record every request the panel (and its pdf.js worker) makes and fail on anything that isn't
+- The panel's CSP is `default-src 'self'; connect-src 'none'` (plus `worker-src 'self'` for the bundled pdf.js and OCR
+  workers, and `'wasm-unsafe-eval'` so the bundled Tesseract wasm can run): extension pages can load nothing from outside
+  the extension and can't make network requests, not even to the extension's own files. pdf.js runs with eval, CMap,
+  standard-font and wasm fetching all off. Tesseract's models ship as scripts inside the extension; its worker's
+  `fetch` is replaced by one that only returns those bundled models and refuses everything else.
+- The end-to-end tests record every request the panel (and its pdf.js and OCR workers) makes and fail on anything that isn't
   the extension's own files, or on any CSP refusal.
 - The only permissions are `sidePanel`, `storage`, and host access to `https://claude.ai/*`.
 - The content script receives only anonymized text, and never writes real names into the page.
@@ -61,7 +64,6 @@ and reopens whenever you come back to that conversation.
 
 ## Not in this version yet
 
-- Scanned PDFs and photos (local OCR, Phase 4b: Tesseract with its Hebrew/English data bundled, never downloaded).
 - Optional: a warning if a declared real name is typed straight into claude.ai by mistake. By design, what you type in Claude
   is not scrubbed: you work there with the stand-in names.
 
@@ -81,8 +83,18 @@ The tests load the unpacked extension in Chromium (Playwright) and drive a **moc
 - the fail-closed states,
 - auto-mode suggestions, tag-a-word, and the Hebrew RTL UI,
 - a long article turning into a Claude attachment (counted as done, never sent, never duplicated),
-- reading Word, a Hebrew PDF (made by Chromium), text files, and refusing a scan,
+- reading Word, a Hebrew PDF (made by Chromium), text files,
+- OCR of fictional Hebrew scans: a two-page scanner PDF (flatbed + tilted phone photo), a JPEG photo, and a 1-bit
+  CCITT G4 fax-style PDF (`test/files/scan-ccitt-g4.pdf`, made by `tools/make-ccitt-fixture.mjs`): every name, ID,
+  date and place must come through, and then be scrubbed,
 - zero network requests from the panel.
+
+**OCR benchmark:** `node tools/ocr-bench.mjs [--save dir]` prints character error rate, identifiers read exactly,
+and seconds per page for fictional Hebrew and English pages under four conditions (clean 300 DPI, 200 DPI scan,
+fax, phone photo), with and without the clean-up step. On 2026-11-06 (Hebrew + English, with clean-up): all
+47/47 identifiers read exactly in every condition, 2–3% character error on Hebrew, under 1% on English, about
+1 second per page. Without clean-up the phone photo dropped to 17% error and lost names. Float `tessdata_best`
+models don't run in the wasm build; English-only mode fails on Hebrew (82% error).
 
 `dist-test/` also matches `http://localhost`, for the mock page; `dist/` matches claude.ai only.
 

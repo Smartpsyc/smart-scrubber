@@ -27,6 +27,32 @@ vendor('mammoth/LICENSE', 'mammoth/LICENSE');
 vendor('pdfjs-dist/build/pdf.min.mjs', 'pdfjs/pdf.min.mjs');
 vendor('pdfjs-dist/build/pdf.worker.min.mjs', 'pdfjs/pdf.worker.min.mjs');
 vendor('pdfjs-dist/LICENSE', 'pdfjs/LICENSE');
+// Scanned PDFs store pages as CCITT/JBIG2/JPEG 2000 images. pdf.js decodes them
+// with wasm it would fetch; the plain-JS fallbacks are imported instead (useWasm: false).
+for (const f of ['jbig2_nowasm_fallback.js', 'openjpeg_nowasm_fallback.js', 'LICENSE_JBIG2', 'LICENSE_PDFJS_JBIG2', 'LICENSE_OPENJPEG', 'LICENSE_PDFJS_OPENJPEG']) {
+  vendor(`pdfjs-dist/wasm/${f}`, `pdfjs/wasm/${f}`);
+}
+
+// OCR for scans: Tesseract (Apache-2.0), its wasm core (SIMD builds only, as every
+// Chrome this extension supports has SIMD; LSTM engine only;
+// the .wasm.js files carry the wasm inside them) and the Hebrew + English models.
+// The models become scripts the OCR worker loads with importScripts, so nothing
+// is fetched (the CSP's connect-src stays 'none').
+vendor('tesseract.js/dist/tesseract.esm.min.js', 'tesseract/tesseract.esm.min.js');
+vendor('tesseract.js/dist/worker.min.js', 'tesseract/worker.min.js');
+vendor('tesseract.js/LICENSE.md', 'tesseract/LICENSE.md');
+for (const f of ['tesseract-core-relaxedsimd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js', 'LICENSE']) {
+  vendor(`tesseract.js-core/${f}`, `tesseract/core/${f}`);
+}
+for (const lang of ['heb', 'eng']) {
+  const gz = readFileSync(join(nm, '@tesseract.js-data', lang, '4.0.0_best_int', `${lang}.traineddata.gz`));
+  writeFileSync(join(out, 'vendor', 'tesseract', `lang-${lang}.js`),
+    `// ${lang}.traineddata.gz (tessdata_best, integer) from @tesseract.js-data/${lang} (MIT; models Apache-2.0)\n`
+    + `self.TESS_LANG = self.TESS_LANG || {};\nself.TESS_LANG.${lang} = "${gz.toString('base64')}";\n`);
+}
+writeFileSync(join(out, 'vendor', 'tesseract', 'LANG-DATA-NOTICE.txt'),
+  'lang-heb.js and lang-eng.js hold heb/eng.traineddata from github.com/tesseract-ocr/tessdata_best\n'
+  + '(Apache License 2.0), as packaged in the npm packages @tesseract.js-data/heb and /eng (MIT).\n');
 
 const manifestPath = join(out, 'manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));

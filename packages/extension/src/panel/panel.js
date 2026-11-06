@@ -67,7 +67,8 @@ function marked(text, ranges) {
 function setMsg(id, text, isErr = false) {
   const n = $(id);
   n.textContent = text || '';
-  n.classList.toggle('err', !!isErr);
+  n.classList.toggle('err', isErr === true);
+  n.classList.toggle('warn', isErr === 'warn');
 }
 
 const errText = (reason) => S.t.err[reason] || S.t.err.error;
@@ -514,7 +515,7 @@ async function loadFile(file) {
   setMsg('file-msg', S.t.fileReading);
   let r;
   try {
-    r = await extractFile(file);
+    r = await extractFile(file, ({ page, pages }) => setMsg('file-msg', S.t.fileReadingScan.replace('{n}', page).replace('{total}', pages)));
   } catch (e) {
     setMsg('file-msg', S.t.fileErr[e.message] || S.t.fileErr.unreadable, true);
     return;
@@ -527,7 +528,8 @@ async function loadFile(file) {
   recompute();
   renderCompose();
   renderLegend();
-  setMsg('file-msg', S.t.fileLoaded.replace('{name}', file.name));
+  if (r.ocr) setMsg('file-msg', S.t.fileLoadedScan.replace('{name}', file.name), 'warn');
+  else setMsg('file-msg', S.t.fileLoaded.replace('{name}', file.name));
 }
 
 async function onBringBack() {

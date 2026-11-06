@@ -3,13 +3,14 @@
 
 import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { startMock } from './mock/server.mjs';
 import { makeDocx, makePdfs } from './fixtures.mjs';
+import { SAMPLES, CONDITIONS, makeScan, imagesToPdf } from './scans.mjs';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist-test');
 let ctx, extId, mock, profile;
@@ -54,6 +55,7 @@ async function openPanel({ mode = 'manual' } = {}) {
   pages.push(p);
   p.on('request', (r) => { if (!/^(chrome-extension|data|blob):/.test(r.url())) offPanelRequests.push(r.url()); });
   p.on('console', (m) => { if (/Refused to|Content Security Policy/i.test(m.text())) cspRefusals.push(m.text()); });
+  if (process.env.PANEL_LOG) { p.on('console', (m) => console.log('[panel]', m.text().slice(0, 300))); p.on('pageerror', (e) => console.log('[panel error]', e.message)); }
   await p.goto(`chrome-extension://${extId}/panel/panel.html`);
   const ok = p.locator('#disclaimer-ok');
   if (await ok.isVisible()) await ok.click();
@@ -335,7 +337,7 @@ test('a long article becomes a Claude attachment: counted as done, never sent, n
 
 async function loadFileInto(panel, name, mimeType, buffer) {
   await panel.setInputFiles('#file', { name, mimeType, buffer });
-  await panel.locator('#file-msg').filter({ hasText: /Loaded|scan|read|big|Use a/ }).waitFor();
+  await panel.locator('#file-msg').filter({ hasText: /Loaded|Read from a scan|Couldn't|big|Use a/ }).waitFor({ timeout: 90_000 });
   return panel.locator('#file-msg').textContent();
 }
 
@@ -368,8 +370,12 @@ test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
   out = await panel.locator('#outgoing').textContent();
   for (const r of ['נועה', 'כהן', 'קריית אונו', '123456782']) assert.ok(!out.includes(r), `pdf outgoing has ${r}`);
 
+  await fillCompose(panel, '');
   msg = await loadFileInto(panel, 'scan.pdf', 'application/pdf', scan);
-  assert.match(msg, /scan with no text/);
+  assert.match(msg, /Read from a scan on this computer: scan\.pdf\. Scans can be misread/);
+  const scanText = await panel.inputValue('#compose');
+  assert.match(scanText, /scanned page: \S+ text layer/i, `an English scan is read too: ${scanText}`);
+  await fillCompose(panel, '');
 
   await fillCompose(panel, 'קודם.');
   msg = await loadFileInto(panel, 'note.txt', 'text/plain', Buffer.from('נועה הגיעה.\r\n'));
@@ -379,7 +385,49 @@ test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
   assert.match(msg, /Use a \.docx/);
 });
 
-test('the panel never touched the network (pdf.js and mammoth included)', () => {
+test('scans and photos are read on this computer (OCR), then scrubbed', async () => {
+  await openMock();
+  const panel = await openPanel();
+  await connected(panel);
+  await addPerson(panel, { first: 'יעל', last: 'ברקוביץ' });
+  await addPerson(panel, { first: 'עומר', last: 'חדד' });
+
+  // A two-page scanner PDF: a flatbed scan and a tilted phone photo, no text layer.
+  const [report, letter] = SAMPLES;
+  const pages = [await makeScan(ctx, report, CONDITIONS.scan200), await makeScan(ctx, letter, CONDITIONS.photo)];
+  const pdf = await imagesToPdf(ctx, pages);
+  const seen = [];
+  const watch = setInterval(async () => { try { seen.push(await panel.locator('#file-msg').textContent()); } catch { /* closing */ } }, 150);
+  const msg = await loadFileInto(panel, 'scanned report.pdf', 'application/pdf', pdf);
+  clearInterval(watch);
+  assert.match(msg, /Read from a scan on this computer: scanned report\.pdf/);
+  assert.equal(await panel.evaluate(() => document.getElementById('file-msg').classList.contains('warn')), true);
+  assert.ok(seen.some((m) => /page 2 of 2/.test(m)), `progress shown: ${[...new Set(seen)].join(' | ')}`);
+  const article = await panel.inputValue('#compose');
+  for (const id of [...report.ids, ...letter.ids]) assert.ok(article.includes(id), `OCR kept ${id}:\n${article}`);
+  assert.ok(article.indexOf('יעל ברקוביץ') < article.indexOf('עומר חדד'), 'pages in order');
+  await panel.waitForFunction(() => document.querySelector('#outgoing').textContent.includes('ת.ז.'));
+  await panel.waitForTimeout(350);
+  const out = await panel.locator('#outgoing').textContent();
+  for (const r of ['יעל', 'ברקוביץ', 'עומר', 'חדד', '204518732', '318472651']) assert.ok(!out.includes(r), `outgoing has ${r}`);
+
+  // A phone photo on its own (JPEG).
+  await fillCompose(panel, '');
+  const note = SAMPLES[2];
+  const photo = await makeScan(ctx, note, CONDITIONS.photo);
+  assert.match(await loadFileInto(panel, 'IMG_2041.jpg', 'image/jpeg', photo.buffer), /Read from a scan/);
+  const text = await panel.inputValue('#compose');
+  for (const id of note.ids) assert.ok(text.includes(id), `photo OCR kept ${id}:\n${text}`);
+
+  // A fax-style office scan: 1-bit CCITT Group 4 (decoded by pdf.js's bundled JS decoder).
+  await fillCompose(panel, '');
+  const g4 = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'files', 'scan-ccitt-g4.pdf'));
+  assert.match(await loadFileInto(panel, 'fax.pdf', 'application/pdf', g4), /Read from a scan/);
+  const fax = await panel.inputValue('#compose');
+  for (const id of letter.ids) assert.ok(fax.includes(id), `CCITT scan OCR kept ${id}:\n${fax}`);
+});
+
+test('the panel never touched the network (pdf.js, mammoth and Tesseract included)', () => {
   assert.deepEqual(offPanelRequests, []);
   assert.deepEqual(cspRefusals, []);
 });

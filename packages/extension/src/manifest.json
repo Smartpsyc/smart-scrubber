@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Smart Scrubber",
   "short_name": "Scrubber",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Swaps names and identifiers for stand-ins before your text reaches claude.ai, and restores them only when you ask. Runs locally.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -33,6 +33,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; connect-src 'none'; img-src 'self' blob: data:; style-src 'self'; font-src 'self'; worker-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'none'; img-src 'self' blob: data:; style-src 'self'; font-src 'self'; worker-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
   }
 }
