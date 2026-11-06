@@ -212,7 +212,7 @@ function recompute() {
   }
 }
 
-const recomputeSoon = debounce(() => { recompute(); renderCompose(); renderLegend(); }, 250);
+const recomputeSoon = debounce(() => { recompute(); renderCompose(); }, 250);
 
 // ---------- rendering ----------
 
@@ -220,7 +220,7 @@ function renderAll() {
   renderStatus();
   renderCase();
   renderCompose();
-  renderLegend();
+ 
   renderRestored();
 }
 
@@ -356,17 +356,6 @@ function renderSendButton() {
   $('copy-out').disabled = !canCommit();
 }
 
-function renderLegend() {
-  if (!S.rec) return;
-  const k = S.preview && S.preview.case ? S.preview.case : S.rec.kase;
-  const rows = legend(k).map((l) => el('li', {},
-    el('span', { dir: 'auto' }, l.real),
-    el('span', { class: 'arrow' }, '→'),
-    el('span', { dir: 'auto' }, [l.surrogate.he, l.surrogate.en].filter((x, i, a) => x && a.indexOf(x) === i).join(' / '))));
-  $('legend').replaceChildren(...(rows.length ? rows : [el('li', { class: 'muted' }, S.t.legendEmpty)]));
-  $('key-count').textContent = rows.length ? `(${rows.length})` : '';
-}
-
 function renderRestored() {
   const r = S.restored;
   $('restored-wrap').hidden = !r;
@@ -422,7 +411,7 @@ function addEntity(entity) {
   }
   setMsg('add-error', '');
   recompute();
-  renderCase(); renderCompose(); renderLegend();
+  renderCase(); renderCompose();
   persistNow().catch(() => {});
   return true;
 }
@@ -441,18 +430,18 @@ async function onAddSubmit(ev) {
 async function onRemoveEntity(id) {
   S.rec.kase = removeEntity(S.rec.kase, id);
   recompute();
-  renderCase(); renderCompose(); renderLegend();
+  renderCase(); renderCompose();
   await persistNow();
 }
 
 function toggleSug(k) {
   if (S.unticked.has(k)) S.unticked.delete(k); else S.unticked.add(k);
-  recompute(); renderCompose(); renderLegend();
+  recompute(); renderCompose();
 }
 
 function setSugGender(k, g) {
   S.genders.set(k, g);
-  recompute(); renderCompose(); renderLegend();
+  recompute(); renderCompose();
 }
 
 // The case that produced these stand-ins is the one that must restore them,
@@ -505,7 +494,6 @@ async function onCopyOut() {
 // After the article goes out, the clinician works in Claude: show the key and restore.
 function advance() {
   $('step2').open = true;
-  $('step3').open = true;
 }
 
 // ---------- files (read locally; see files.js) ----------
@@ -527,7 +515,7 @@ async function loadFile(file) {
   persistSoon();
   recompute();
   renderCompose();
-  renderLegend();
+ 
   if (r.ocr) setMsg('file-msg', S.t.fileLoadedScan.replace('{name}', file.name), 'warn');
   else setMsg('file-msg', S.t.fileLoaded.replace('{name}', file.name));
 }
@@ -538,7 +526,7 @@ async function onBringBack() {
   const r = await ask('readLast');
   if (!r.ok) { setMsg('restore-msg', errText(r.reason), true); return; }
   S.restored = restore(r.text, S.rec.kase);
-  $('step3').open = true;
+  $('step2').open = true;
   renderRestored();
 }
 
@@ -650,7 +638,7 @@ async function boot() {
   for (const b of document.querySelectorAll('.seg button')) {
     b.addEventListener('click', async () => {
       S.rec.mode = b.dataset.mode;
-      recompute(); renderCase(); renderCompose(); renderLegend();
+      recompute(); renderCase(); renderCompose();
       await persistNow();
     });
   }

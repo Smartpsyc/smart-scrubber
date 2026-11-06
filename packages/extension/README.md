@@ -1,16 +1,17 @@
 # Smart Scrubber: Chrome extension
 
-A side panel for claude.ai, built around one workflow:
+A side panel for claude.ai, built around one workflow in two steps:
 
-1. **Anonymize the article.** Paste it into the panel or drop in a Word, PDF or text file. New cases start in **Auto**:
+1. **Anonymize and put into Claude.** Paste the article into the panel, or drop in a Word, PDF or text file, a scan or a
+   photo of a page. New cases start in **Auto**:
    names and places are found for you, so in a rush it is paste and click. **Check and adjust** (folded under the article)
    holds the rest: what was found (untick mistakes), Manual mode with your own list of people and places, the
    highlighted preview, and the exact text Claude will get. Then **Put into Claude**: the anonymized text goes into Claude's message box, after
    anything you typed there. It never sends: you send it yourself. (A long article becomes a "pasted text" attachment,
    as claude.ai does with any long paste.) Or use **Copy anonymized**.
-2. **Work in Claude.** Everything there is anonymous, so work as usual. The panel shows the key (real name → stand-in)
-   so you can refer to people by their stand-in names.
-3. **Bring back the final version.** Click **Restore real names** (in Claude's last reply), or paste anything copied from Claude
+   Then work in Claude as usual: everything there is anonymous. (Who became whom is on the chips under
+   **Check and adjust → People & places**.)
+2. **Bring back the final version.** Click **Restore real names** (in Claude's last reply), or paste anything copied from Claude
    (a reply, an artifact). The real identifiers come back in the panel, ready to copy or export.
 
 The claude.ai page only ever holds the anonymized version. **Everything runs in your browser**: nothing is sent to any
@@ -29,13 +30,14 @@ Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** 
 Pin the extension, open claude.ai, then click the toolbar icon to open the panel.
 
 **After updating the code:** Chrome keeps running the old copy until you click the ↻ reload icon on the extension's card
-in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.3.0`).
+in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.4.0`).
 
 ## How it works
 
 | Piece | File | Notes |
 |-------|------|-------|
-| Side panel | `src/panel/` | Case fields (manual), suggestion chips (auto), preview, outgoing text, key, restore. English + Hebrew (RTL). |
+| Side panel | `src/panel/` | Case fields (manual), suggestion chips (auto), preview, outgoing text, restore. English + Hebrew (RTL). SmartPsyc byline, footer, and an offer card after a restore (links only: no network requests). |
+| Icons | `src/icons/icon.svg` → PNGs via `tools/icons.mjs` | A sponge scrubbing, with a lock. |
 | Engine | `vendor/scrub-core/` (copied in at build) | Same code as `packages/scrub-core`, loaded as native ES modules: no bundler. |
 | File reading | `src/panel/files.js` + `vendor/mammoth`, `vendor/pdfjs` (copied in at build) | `.docx` via mammoth → Markdown (headings, lists, tables); `.pdf` via pdf.js text layer, with right-to-left line re-ordering for Hebrew; `.txt`/`.md`. All in the panel's memory. |
 | OCR (scans, photos) | `src/panel/ocr.js`, `ocr-prep.js`, `ocr-worker.js` + `vendor/tesseract` | PDF pages with no text layer, and `.jpg`/`.png`/`.webp` photos, are read with Tesseract 5 (tesseract.js 7, Hebrew + English `tessdata_best` integer models, LSTM engine). Each page is rendered at 300 DPI, its lighting evened out and its tilt straightened, then read in a worker. Fax-style CCITT/JBIG2 and JPEG 2000 scans decode with pdf.js's bundled plain-JS decoders. The message after a scan asks you to check the names, because a misread name can't be matched. |
@@ -66,6 +68,20 @@ and reopens whenever you come back to that conversation.
 
 - Optional: a warning if a declared real name is typed straight into claude.ai by mistake. By design, what you type in Claude
   is not scrubbed: you work there with the stand-in names.
+
+## Publishing to the Chrome Web Store
+
+```
+npm run package          # → release/smart-scrubber-v<version>.zip
+npm run store-assets     # → store/screenshot-*.png (1280×800), store/promo-small.png (440×280)
+```
+
+Everything to paste into the dashboard (descriptions in English and Hebrew, permission justifications, data-use
+answers, privacy policy URL) is in [`store/listing.md`](store/listing.md); the privacy policy is
+[`../../PRIVACY.md`](../../PRIVACY.md). Bump `version` in `src/manifest.json` for every upload.
+
+To share before the store review: send the zip; colleagues unzip it, turn on Developer mode in `chrome://extensions`
+and **Load unpacked** the folder (Chrome won't auto-update it).
 
 ## Tests
 

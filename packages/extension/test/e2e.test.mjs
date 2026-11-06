@@ -90,7 +90,7 @@ async function setMode(panel, mode) {
 }
 
 async function restorePasted(panel, text) {
-  await panel.evaluate(() => { for (const id of ['step3', 'paste-box']) document.getElementById(id).open = true; });
+  await panel.evaluate(() => { for (const id of ['step2', 'paste-box']) document.getElementById(id).open = true; });
   await panel.fill('#paste', text);
   await panel.click('#restore-paste');
 }
@@ -329,7 +329,7 @@ test('a long article becomes a Claude attachment: counted as done, never sent, n
   assert.deepEqual(await page.evaluate(() => window.__sent), []);
   assert.equal(await page.locator('[data-testid="file-thumbnail"]').count(), 1);
   assert.equal(await page.evaluate(() => document.querySelector('[data-testid="chat-input"]').innerText.trim()), '');
-  assert.equal(await panel.evaluate(() => document.getElementById('step3').open), true, 'restore step opens');
+  assert.equal(await panel.evaluate(() => document.getElementById('step2').open), true, 'restore step opens');
   await page.click('[data-testid="chat-input-send"]');
   const [sent] = await page.evaluate(() => window.__sent);
   assert.ok(!sent.includes('נועה') && sent.includes('120.'), 'the attachment carried the anonymized article');

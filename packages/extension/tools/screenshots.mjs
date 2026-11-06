@@ -24,5 +24,6 @@ await openFold('add-box');
 await p.screenshot({ path: join(out, 'panel-2b-people-he.png'), fullPage: true });
 await p.click('#insert'); await p.waitForTimeout(300); await page.click('[data-testid="chat-input-send"]'); await page.locator('[data-testid="message-actions"]').waitFor({ state: 'attached' });
 await p.click('#bring-back'); await p.locator('#restored-wrap').waitFor();
+await p.evaluate(() => { document.getElementById('step1').open = false; });
 await p.screenshot({ path: join(out, 'panel-3-restored-he.png'), fullPage: true });
 await ctx.close(); mock.server.close();

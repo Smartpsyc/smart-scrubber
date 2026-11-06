@@ -4,11 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Smart Scrubber</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png">
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
   <header class="bar">
-    <div class="brand"><strong data-i18n="appName"></strong> <span class="muted" id="version"></span></div>
+    <div class="brand">
+      <div class="brand-row"><img class="mark" src="../icons/icon.svg" alt="" width="22" height="22"><strong data-i18n="appName"></strong> <span class="muted" id="version"></span></div>
+      <div class="byline" data-i18n="byline"></div>
+    </div>
     <div class="bar-actions">
       <button type="button" id="lang" class="ghost"></button>
       <button type="button" id="open-settings" class="ghost" data-i18n-title="settings" aria-haspopup="dialog">⚙</button>
@@ -129,18 +133,9 @@
     </div>
   </details>
 
-  <!-- 2 · Work in Claude -->
+  <!-- 2 · Restore -->
   <details class="step" id="step2">
-    <summary><span class="step-n">2</span><span data-i18n="step2Title"></span> <span class="count" id="key-count"></span></summary>
-    <div class="step-body">
-      <p class="hint" data-i18n="step2Hint"></p>
-      <ul id="legend" class="legend"></ul>
-    </div>
-  </details>
-
-  <!-- 3 · Restore -->
-  <details class="step" id="step3">
-    <summary><span class="step-n">3</span><span data-i18n="step3Title"></span></summary>
+    <summary><span class="step-n">2</span><span data-i18n="step2Title"></span></summary>
     <div class="step-body">
       <button type="button" id="bring-back" class="primary big">
         <span class="big-main" data-i18n="restoreBtn"></span>
@@ -162,9 +157,19 @@
           <button type="button" id="copy" data-i18n="copy"></button>
           <button type="button" id="export" data-i18n="exportMd"></button>
         </div>
+        <aside class="offer" id="offer" aria-labelledby="offer-h">
+          <p class="offer-h" id="offer-h" data-i18n="offerTitle"></p>
+          <p class="offer-p" data-i18n="offerText"></p>
+          <a class="btn-outline" href="https://smartpsyc.com" target="_blank" rel="noopener" data-i18n="offerBtn"></a>
+        </aside>
       </div>
     </div>
   </details>
+
+  <footer class="site-foot">
+    <strong data-i18n="footBy"></strong> · <span data-i18n="footText"></span>
+    <a href="https://smartpsyc.com" target="_blank" rel="noopener" dir="ltr">smartpsyc.com</a>
+  </footer>
 
   <div id="tag-menu" class="tag-menu" role="menu" hidden>
     <span class="muted" data-i18n="tagAs"></span>

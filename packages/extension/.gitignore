@@ -1,3 +1,5 @@
 dist/
 dist-test/
 test-results/
+release/
+store/shots/
