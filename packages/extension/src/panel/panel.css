@@ -166,6 +166,8 @@ details[open].step > summary::after, details[open].sub > summary::after { transf
 
 details.sub { border-block-start: 1px solid var(--line); margin-block: 8px 0; padding-block-start: 6px; }
 details.sub > summary { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); padding-block: 4px; }
+details.sub[open] > summary { color: var(--text); }
+details.sub > summary:hover { color: var(--text); }
 details.sub.inner { border: 0; }
 details.sub.inner > summary { color: var(--accent-text); font-weight: 500; }
 details.sub.inner > summary:hover { text-decoration: underline; }

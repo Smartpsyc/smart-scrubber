@@ -27,7 +27,7 @@ Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** 
 Pin the extension, open claude.ai, then click the toolbar icon to open the panel.
 
 **After updating the code:** Chrome keeps running the old copy until you click the ↻ reload icon on the extension's card
-in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.2`).
+in `chrome://extensions` (then reload the claude.ai tab). The panel header shows the running version (e.g. `v0.2.3`).
 
 ## How it works
 

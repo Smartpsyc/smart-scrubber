@@ -11,14 +11,14 @@ const p = await ctx.newPage(); await p.goto(`chrome-extension://${new URL(sw.url
 await p.locator('#status.ok').waitFor();
 await p.screenshot({ path: join(out, 'panel-0-first-run.png'), fullPage: true });
 await p.click('#disclaimer-ok');
-await p.evaluate(() => { document.getElementById('add-box').open = true; });
+await p.evaluate(() => { document.getElementById('people-box').open = true; document.getElementById('add-box').open = true; });
 await p.fill('input[name=first]', 'נועה'); await p.fill('input[name=last]', 'כהן'); await p.click('#add-btn');
 await p.selectOption('#add-kind', 'town'); await p.fill('input[name=place]', 'קריית אונו'); await p.click('#add-btn');
-await p.evaluate(() => { document.getElementById('add-box').open = false; });
+await p.evaluate(() => { document.getElementById('add-box').open = false; document.getElementById('article-box').open = true; });
 await p.fill('#compose', 'נועה כהן הגיעה עם אמה רחל מקריית אונו. ת.ז. 123456782, נולדה 12/03/2015.\nנועה סיפרה שהיא ישנה רע.');
 await p.waitForTimeout(500);
 await p.screenshot({ path: join(out, 'panel-1-manual.png'), fullPage: true });
-await p.click('#mode-auto'); await p.waitForTimeout(500);
+await p.evaluate(() => { document.getElementById('people-box').open = true; }); await p.click('#mode-auto'); await p.evaluate(() => { document.getElementById('suggestions-wrap').open = true; }); await p.waitForTimeout(500);
 await p.click('#lang'); await p.waitForTimeout(200);
 await p.screenshot({ path: join(out, 'panel-2-auto-he.png'), fullPage: true });
 await p.click('#insert'); await p.waitForTimeout(300); await page.click('[data-testid="chat-input-send"]'); await page.locator('[data-testid="message-actions"]').waitFor({ state: 'attached' });

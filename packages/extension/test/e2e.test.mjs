@@ -64,6 +64,16 @@ async function connected(panel) {
   await panel.locator('#status.ok').waitFor({ timeout: 8000 });
 }
 
+// Step 1 folds are exclusive (one open at a time): open the one a test needs.
+async function fold(panel, id) {
+  await panel.evaluate((x) => { document.getElementById(x).open = true; }, id);
+}
+
+async function fillCompose(panel, text) {
+  await fold(panel, 'article-box');
+  await panel.fill('#compose', text);
+}
+
 async function openAdd(panel) {
   await panel.evaluate(() => {
     for (const id of ['people-box', 'add-box']) document.getElementById(id).open = true;
@@ -97,7 +107,7 @@ async function addPlace(panel, kind, name) {
 }
 
 async function compose(panel, text) {
-  await panel.fill('#compose', text);
+  await fillCompose(panel, text);
   await panel.waitForFunction(() => document.querySelector('#outgoing').textContent.trim().length > 0);
   await panel.waitForTimeout(350); // debounce
   return panel.locator('#outgoing').textContent();
@@ -120,7 +130,7 @@ test('manual: anonymize the article, work in Claude, restore the final version',
   await connected(panel);
 
   await addPerson(panel, { first: 'נועה', firstOther: 'Noa', last: 'כהן', lastOther: 'Cohen' });
-  await panel.locator('#entities li[data-entity]').first().waitFor();
+  await panel.locator('#entities li[data-entity]').first().waitFor({ state: 'attached' });
   await addPlace(panel, 'town', 'קריית אונו');
   await panel.waitForFunction(() => document.querySelectorAll('#entities li[data-entity]').length === 2, null, { timeout: 3000 })
     .catch(async () => assert.fail(`entities: ${await panel.locator('#entities').textContent()} / error: ${await panel.locator('#add-error').textContent()}`));
@@ -173,7 +183,7 @@ test('manual: anonymize the article, work in Claude, restore the final version',
   // A new panel on the same conversation reopens the same case.
   const panel2 = await openPanel();
   await connected(panel2);
-  await panel2.locator('#entities li[data-entity]').first().waitFor();
+  await panel2.locator('#entities li[data-entity]').first().waitFor({ state: 'attached' });
   assert.equal(await panel2.locator('#entities li[data-entity]').count(), 2);
   await restorePasted(panel2, sent[0]);
   await panel2.waitForFunction((t) => document.querySelector('#restored').textContent === t, NOTE);
@@ -213,7 +223,7 @@ test("fails closed when Claude's page structure is unknown", async () => {
   await panel.locator('#status.bad').waitFor();
   assert.match(await panel.locator('#status').textContent(), /paused/);
   await addPerson(panel, { first: 'דנה' });
-  await panel.fill('#compose', 'דנה הגיעה.');
+  await fillCompose(panel, 'דנה הגיעה.');
   await panel.waitForTimeout(400);
   assert.equal(await panel.locator('#insert').isDisabled(), true);
   assert.equal(await panel.locator('#copy-out').isDisabled(), false, 'copy needs no page');
@@ -240,9 +250,11 @@ test('auto mode: suggestions are scrubbed unless unticked, and join the case on 
   const page = await openMock();
   const panel = await openPanel();
   await connected(panel);
+  await fold(panel, 'people-box');
   await panel.click('#mode-auto');
   const text = 'נועם הגיע עם אמו רחל לוי מחיפה. המורה גב\' שירה אמרה שהוא מתקשה.';
   let out = await compose(panel, text);
+  await fold(panel, 'suggestions-wrap');
   await panel.locator('#suggestions li[data-suggestion]').first().waitFor();
   for (const r of ['רחל', 'לוי', 'חיפה', 'שירה']) assert.ok(!out.includes(r), `auto missed ${r}: ${out}`);
 
@@ -268,6 +280,7 @@ test('tag-a-word adds a selected word to the case', async () => {
   await connected(panel);
   let out = await compose(panel, 'דני הגיע עם יואב.');
   assert.ok(out.includes('דני'));
+  await fold(panel, 'preview-box');
   await panel.evaluate(() => {
     const node = document.querySelector('#preview').firstChild;
     const r = document.createRange();
@@ -337,7 +350,7 @@ test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
   out = await panel.locator('#outgoing').textContent();
   for (const r of ['נועה', 'כהן', 'קריית אונו', '123456782']) assert.ok(!out.includes(r), `docx outgoing has ${r}`);
 
-  await panel.fill('#compose', '');
+  await fillCompose(panel, '');
   const { text: pdf, scan } = await makePdfs(ctx);
   msg = await loadFileInto(panel, 'report.pdf', 'application/pdf', pdf);
   assert.match(msg, /Loaded/);
@@ -352,7 +365,7 @@ test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
   msg = await loadFileInto(panel, 'scan.pdf', 'application/pdf', scan);
   assert.match(msg, /scan with no text/);
 
-  await panel.fill('#compose', 'קודם.');
+  await fillCompose(panel, 'קודם.');
   msg = await loadFileInto(panel, 'note.txt', 'text/plain', Buffer.from('נועה הגיעה.\r\n'));
   assert.equal(await panel.inputValue('#compose'), 'קודם.\n\nנועה הגיעה.', 'appended, line endings tidied');
 
@@ -363,4 +376,23 @@ test('files are read locally: Word, a Hebrew PDF, plain text', async () => {
 test('the panel never touched the network (pdf.js and mammoth included)', () => {
   assert.deepEqual(offPanelRequests, []);
   assert.deepEqual(cspRefusals, []);
+});
+
+test('step 1 folds: one open at a time, each header says where things stand', async () => {
+  await openMock();
+  const panel = await openPanel();
+  await connected(panel);
+  const open = () => panel.evaluate(() => [...document.querySelectorAll('details[name="s1"]')].filter((d) => d.open).map((d) => d.id));
+  assert.deepEqual(await open(), ['article-box'], 'the article is open first');
+  assert.match(await panel.locator('#people-count').textContent(), /none yet · Manual/);
+  await addPerson(panel, { first: 'נועה', last: 'כהן' });
+  assert.deepEqual(await open(), ['people-box'], 'opening one closes the others');
+  assert.match(await panel.locator('#people-count').textContent(), /\(1\) · Manual/);
+  await compose(panel, 'נועה כהן הגיעה היום.');
+  assert.deepEqual(await open(), ['article-box']);
+  assert.equal(await panel.locator('#article-count').textContent(), '4 words');
+  assert.equal(await panel.locator('#preview-count').textContent(), '2 to replace');
+  await panel.click('#preview-box > summary');
+  assert.deepEqual(await open(), ['preview-box']);
+  assert.equal(await panel.locator('#insert').isDisabled(), false, 'the buttons stay outside the folds');
 });

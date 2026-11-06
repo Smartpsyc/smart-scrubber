@@ -81,6 +81,7 @@ function applyLang() {
   for (const n of document.querySelectorAll('[data-i18n]')) n.textContent = S.t[n.dataset.i18n] ?? '';
   for (const n of document.querySelectorAll('[data-i18n-ph]')) n.placeholder = S.t[n.dataset.i18nPh] ?? '';
   for (const n of document.querySelectorAll('[data-i18n-title]')) n.title = S.t[n.dataset.i18nTitle] ?? '';
+  for (const n of document.querySelectorAll('[data-i18n-aria]')) n.setAttribute('aria-label', S.t[n.dataset.i18nAria] ?? '');
   $('lang').textContent = S.t.langToggle;
   const role = $('role-select');
   const current = role.value || 'client';
@@ -257,7 +258,8 @@ function renderCase() {
       el('button', { type: 'button', class: 'x', 'aria-label': `${S.t.remove} ${name}`, onclick: () => onRemoveEntity(e.id) }, '×'));
   });
   list.replaceChildren(...(items.length ? items : [el('li', { class: 'empty' }, S.t.nothingDeclared)]));
-  $('people-count').textContent = items.length ? `(${items.length})` : '';
+  const modeLabel = S.rec.mode === 'auto' ? S.t.modeAuto : S.t.modeManual;
+  $('people-count').textContent = `${items.length ? `(${items.length})` : S.t.noneYet} · ${modeLabel}`;
   showFieldsFor($('add-kind').value);
 }
 
@@ -301,8 +303,17 @@ function renderCompose() {
     }
   }
 
+  // Folded headers carry the status, so a closed fold still says where things stand.
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  $('article-count').textContent = words ? S.t.wordsN.replace('{n}', words.toLocaleString()) : S.t.emptyArticle;
+  const nRepl = p && !p.error ? p.spans.length : 0;
+  $('preview-count').textContent = nRepl ? S.t.replaceN.replace('{n}', nRepl) : '';
   const wrap = $('suggestions-wrap');
   wrap.hidden = !(S.rec && S.rec.mode === 'auto' && text.trim());
+  const nFound = S.suggestions.filter((s) => s.kind !== 'spelling' && !S.unticked.has(sugKey(s))).length;
+  $('found-count').textContent = wrap.hidden ? '' : `(${nFound})`;
+  // A hidden fold can't stay the open one: fall back to the article.
+  if (wrap.hidden && wrap.open) { wrap.open = false; $('article-box').open = true; }
   if (!wrap.hidden) {
     const chips = S.suggestions.filter((s) => s.kind !== 'spelling').map((s) => {
       const k = sugKey(s);
@@ -493,6 +504,7 @@ function advance() {
 
 async function loadFile(file) {
   if (!file || !S.rec) return;
+  $('article-box').open = true; // the result lands in the article
   setMsg('file-msg', S.t.fileReading);
   let r;
   try {
